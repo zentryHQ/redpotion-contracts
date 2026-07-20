@@ -1,0 +1,51 @@
+[profile.default]
+src = "src"
+out = "out"
+solc_version = "0.8.34"
+auto_detect_solc = false
+libs = ["lib"]
+evm_version = 'cancun'
+optimizer = true
+optimizer_runs = 100
+via_ir = true
+
+remappings = [
+  '@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/',
+  '@openzeppelin/contracts/=lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/',
+  'openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/',
+  'openzeppelin-contracts/=lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/',
+]
+
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+base-sepolia = "${BASE_SEPOLIA_RPC_URL}"
+local = "http://localhost:8545"
+
+[etherscan]
+mainnet = { key = "${ETHER_SCAN_API_KEY}", url = "https://api.etherscan.io/v2/api", chain = 1 }
+base-sepolia = { key = "${ETHER_SCAN_API_KEY}", url = "https://api.etherscan.io/v2/api", chain = 84532 }
+
+[profile.production]
+optimizer = true
+optimizer_runs = 10000
+via_ir = true
+
+[fmt]
+line_length = 120
+single_line_statement_blocks = 'multi'
+multiline_func_header = 'attributes_first'
+contract_new_lines = false
+override_spacing = false
+tab_width = 4
+bracket_spacing = false
+int_types = 'long'
+quote_style = 'double'
+number_underscore = 'remove'
+sort_imports = true
+ignore = ["out/**/*.sol", "lib/**/*.sol"]
+
+[lint]
+ignore = ["test/**/*.sol"]
+severity = ["high", "med"]

@@ -1,0 +1,22 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://ethereum.reth.rs/rpc"
+    },
+    {
+      "rpc": "https://ethereum.reth.rs/rpc"
+    },
+    {
+      "rpc": "https://ethereum.reth.rs/rpc"
+    },
+    {
+      "rpc": "https://ethereum.reth.rs/rpc"
+    },
+    {
+      "rpc": "https://ethereum.reth.rs/rpc"
+    },
+    {
+      "rpc": "https://ethereum.reth.rs/rpc"
+    }
+  ]
+}
