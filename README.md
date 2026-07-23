@@ -84,6 +84,7 @@ sequenceDiagram
     U->>DQ: claimDeposit(asset, N) — receive shares
     U->>RQ: redeem(asset, shares)              — queued into batch M
     Note over F: batch M settles (payout snapshotted)
+    Note over F: assets return to Fund — pulled from strategies,<br/>or transferred back by external wallets / bridges
     F->>RQ: fundRedeem(asset, M) — assets delivered
     U->>RQ: claimRedeem(asset, M) — receive assets
 ```

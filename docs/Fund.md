@@ -63,11 +63,15 @@ Share math (in `QueueModule`):
 
 ### Redeem funding flow
 
-Settlement only *records* how much each redeem batch is owed. Actually paying it out is a second, role-gated step (the fund's assets may be deployed in strategies and need to be pulled back first):
+Settlement only *records* how much each redeem batch is owed. Actually paying it out is a second, role-gated step, because at settlement time the fund's assets are typically deployed elsewhere and must first return to the Fund. There are two ways assets come back:
 
-1. `pullAssetFromStrategy` / … until the Fund holds enough of the payout asset.
-2. `fundRedeem(asset, batchId)` — transfers the snapshotted `batchAssetTotals` amount to the RedeemQueue and marks the batch funded.
-3. Users call `RedeemQueue.claimRedeem`.
+- **From strategies** — `pullAssetFromStrategy` (`PULL_FROM_STRATEGY_ROLE`): the Fund pulls the assets back itself; a [Strategy](Strategy.md) can never refuse a pull.
+- **From external wallets** — the wallet's controller transfers assets back to the Fund address with a plain transfer. The Fund cannot pull from an external wallet (see `pushAssetToWallet` above); this leg is operational trust in the wallet controller. The same applies to capital deployed cross-chain via [StandaloneStrategy](StandaloneStrategy.md) — it is bridged back to the Fund externally.
+
+Once the Fund holds enough of the payout asset:
+
+1. `fundRedeem(asset, batchId)` — transfers the snapshotted `batchAssetTotals` amount to the RedeemQueue and marks the batch funded.
+2. Users call `RedeemQueue.claimRedeem`.
 
 ## Function reference
 

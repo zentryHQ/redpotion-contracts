@@ -24,7 +24,7 @@ stateDiagram-v2
 1. **Request** — user calls `redeem`, choosing which allowed asset they want to be paid in. Shares are transferred into the queue (requires prior ERC20 approval of the share token). `Fund.checkRedeem` → [RiskManager](RiskManager.md) enforces minimums and batch caps. One request per (asset, batch, user).
 2. **Cancel** — the user can cancel their current-batch request before settlement and get their shares back. An admin (`CANCEL_REDEEM_REQUEST_ROLE`) can cancel any request in any unsettled batch.
 3. **Settle** — during `Fund.acceptReport`, `settleRedeem` transfers the batch's shares to the Fund (which burns them) and **snapshots the asset payout** (`batchAssetTotals`) computed at the accepted price minus exit fee. Because the payout is snapshotted here, later admin changes to exit fee or price cannot change what the batch is owed. The batch is tracked as *settled-but-unfunded*.
-4. **Fund** — `FUND_REDEEM_ROLE` calls `Fund.fundRedeem(asset, batchId)`, which transfers the snapshotted amount to the queue and calls `fundRedeem` here, marking the batch claimable.
+4. **Fund** — the operator first brings assets back to the Fund (either the Fund pulls them from strategy contracts via `Fund.pullAssetFromStrategy`, or external wallets / bridges transfer them back to the Fund address), then `FUND_REDEEM_ROLE` calls `Fund.fundRedeem(asset, batchId)`, which transfers the snapshotted amount to the queue and calls `fundRedeem` here, marking the batch claimable.
 5. **Claim** — user calls `claimRedeem` and receives `shares * batchAssetTotals / batchRedeemTotals` (pro-rata).
 
 ## Function reference
