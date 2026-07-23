@@ -6,7 +6,9 @@
 
 ### Responsibility
 
-`StandaloneStrategy` is the same **allowlisted-call execution wallet** as [Strategy](Strategy.md), but **not controlled by a Fund**. It reuses the identical `CallValidatorModule` allowlist machinery and `CALLER_ROLE` execution interface; the differences are in who controls the assets:
+`StandaloneStrategy` is the same **allowlisted-call execution wallet** as [Strategy](Strategy.md), but **not controlled by a Fund**. Its purpose is to **deploy fund strategies on a different chain than the Fund itself**: the Fund (and the rest of the fund instance) lives on the home chain, while a StandaloneStrategy executes on another chain where the target protocols live. Assets are moved between the Fund and the strategy by bridging (operationally, outside these contracts), and the results are reflected back into the fund's NAV through the [Oracle](Oracle.md)'s price reports.
+
+Because the Fund does not exist on the strategy's chain, there is no `onlyFund` control — the strategy has its own admin, and the `fund` field is just an optional reference. It reuses the identical `CallValidatorModule` allowlist machinery and `CALLER_ROLE` execution interface; the differences are in who controls the assets:
 
 | | [Strategy](Strategy.md) | StandaloneStrategy |
 |---|---|---|
