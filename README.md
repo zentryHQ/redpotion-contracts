@@ -63,7 +63,7 @@ Each deployed contract has a detailed doc covering its responsibility, flows, an
 | `FeeManager` | [docs/FeeManager.md](docs/FeeManager.md) | Entry/exit/management/performance/protocol fees, paid in minted shares; high-water mark. |
 | `RiskManager` | [docs/RiskManager.md](docs/RiskManager.md) | Deposit/redeem guardrails: TVL & batch caps, minimums, drawdown gate, merkle whitelist, emergency pause. |
 | `Strategy` | [docs/Strategy.md](docs/Strategy.md) | Fund-controlled execution wallet limited to an allowlist of (caller, target, selector[, pinned calldata]) calls. |
-| `StandaloneStrategy` / `StandaloneStrategyDeployer` | [docs/StandaloneStrategy.md](docs/StandaloneStrategy.md) | The same execution engine, detached from Fund control, with its own deployer. |
+| `StandaloneStrategy` / `StandaloneStrategyDeployer` | [docs/StandaloneStrategy.md](docs/StandaloneStrategy.md) | The same execution engine, detached from Fund control — for deploying fund strategies **on other chains** (assets bridged externally, results reflected via oracle NAV). |
 
 Cross-cutting reference: [Access Control & Roles](docs/AccessControl.md) — the two auth patterns, the full role table, and the upgrade-authority model.
 

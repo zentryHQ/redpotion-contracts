@@ -13,11 +13,11 @@ Because the Fund does not exist on the strategy's chain, there is no `onlyFund` 
 | | [Strategy](Strategy.md) | StandaloneStrategy |
 |---|---|---|
 | Deployed by | `Fund.createStrategy` → FundManager | [`StandaloneStrategyDeployer`](#standalonestrategydeployer) |
-| `fund` field | Required, enforces `onlyFund` on `pullAsset` | Optional reference — may be zero, i.e. the strategy can be deployed **orphaned** with no fund at all; when set, it's only used to forbid calling the fund via `call` |
-| Asset recovery | `pullAsset(asset, amount)` — **only the Fund**, assets always return to the Fund | `pullAsset(asset, to, amount)` — **strategy admin** (`DEFAULT_ADMIN_ROLE`), to any address |
+| Chain | Same chain as the Fund | **Any chain** — typically not the Fund's chain |
+| `fund` field | Required, enforces `onlyFund` on `pullAsset` | Optional reference — may be zero (**orphan**), since the Fund usually doesn't exist on this chain; when set, it's only used to forbid calling that address via `call` |
+| Asset recovery | `pullAsset(asset, amount)` — **only the Fund**, assets always return to the Fund | `pullAsset(asset, to, amount)` — **strategy admin** (`DEFAULT_ADMIN_ROLE`), to any address (e.g. a bridge or the Fund's address on the home chain) |
 | Registered in `Fund.isStrategy` | Yes (push/pull integration) | No |
-
-Use it for managed execution wallets that operate independently of the fund lifecycle (e.g. proprietary trading wallets with call-level guardrails), while keeping the same operational tooling as fund strategies.
+| Asset in/out | `Fund.pushAssetToStrategy` / `pullAssetFromStrategy` | Bridged/transferred externally |
 
 ### Function reference
 
@@ -35,7 +35,7 @@ Use it for managed execution wallets that operate independently of the fund life
 
 ### Responsibility
 
-`StandaloneStrategyDeployer` is the **root deployer for standalone strategies** — a slimmed-down analog of [FundManagerDeployer](FundManagerDeployer.md). It owns a single [Factory](Factory.md) that stamps out `StandaloneStrategy` proxies, and keeps a registry of everything it deployed.
+`StandaloneStrategyDeployer` is the **root deployer for standalone strategies** — a slimmed-down analog of [FundManagerDeployer](FundManagerDeployer.md), deployed on each **strategy chain** (the chains where funds execute remotely, without the rest of the protocol stack). It owns a single [Factory](Factory.md) that stamps out `StandaloneStrategy` proxies, and keeps a registry of everything it deployed.
 
 It has its own `ACLModule` access control (independent of any fund).
 

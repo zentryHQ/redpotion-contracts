@@ -76,4 +76,4 @@ sequenceDiagram
 
 ## Related
 
-- [StandaloneStrategy](StandaloneStrategy.md) — the same execution engine detached from Fund control.
+- [StandaloneStrategy](StandaloneStrategy.md) — the same execution engine detached from Fund control, for deploying strategies on a **different chain** than the Fund.
