@@ -56,6 +56,7 @@ All identifiers are `keccak256("<NAME>")`. Enforced-by shows where the guarded f
 | `PAUSE_REDEEM_ROLE` / `UNPAUSE_REDEEM_ROLE` | RedeemQueue | Global & per-asset pause. |
 | `CANCEL_REDEEM_REQUEST_ROLE` | RedeemQueue | `adminCancelRedeem`. |
 | `PULL_REDEEM_ASSET_ROLE` | RedeemQueue | `pullAsset` (queue → Fund). |
+| `SET_CANCEL_LOCK_WINDOW_ROLE` | DepositQueue & RedeemQueue | `setCancelLockWindow` — how long before each batch cutoff public cancellation freezes. |
 | `SET_TVL_CAP_ROLE` | RiskManager | `setTvlCap`. |
 | `SET_BATCH_CAPS_ROLE` | RiskManager | `setMaxBatchDepositCap` / `setMaxBatchRedeemCap`. |
 | `SET_MIN_DEPOSIT_AMOUNT_ROLE` / `SET_MIN_REDEEM_AMOUNT_ROLE` | RiskManager | Minimum request sizes. |
@@ -71,7 +72,7 @@ All identifiers are `keccak256("<NAME>")`. Enforced-by shows where the guarded f
 
 **Strategy / StandaloneStrategy** (`StrategyACLModule` + `CallValidatorModule`): `CALLER_ROLE` (execute allowlisted calls), `ADD_ALLOWED_CALL_ROLE`, `REMOVE_ALLOWED_CALL_ROLE`.
 
-**StandaloneStrategyDeployer**: `CREATE_STRATEGY_ROLE`, `SET_IMPLEMENTATIONS_ROLE`.
+**StandaloneStrategyDeployer**: `CREATE_STRATEGY_ROLE`, `SET_IMPLEMENTATION_ROLE`.
 
 ## Upgrade authority (separate from roles)
 

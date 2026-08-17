@@ -43,8 +43,8 @@ It has its own `ACLModule` access control (independent of any fund).
 
 | Function | Access | Description |
 |---|---|---|
-| `initialize(admin, proxyAdmin, standaloneStrategyFactory, roleHolders[])` | initializer | Sets the admin, the ProxyAdmin owner reference, and the factory. |
-| `setImplementations(factoryImpl, standaloneStrategyImpl)` | `SET_IMPLEMENTATIONS_ROLE` | Records both implementations and pushes the strategy implementation into the factory (future deploys use it; existing proxies are upgraded separately via their ProxyAdmin). |
-| `createStandaloneStrategy(fund, admin, roleHolders[])` | `CREATE_STRATEGY_ROLE` | Deploys a new StandaloneStrategy proxy via `factory.create` (its ProxyAdmin ends up owned by the factory's owner) and initializes it. `fund` may be zero. |
+| `initialize(admin, standaloneStrategyFactory, roleHolders[])` | initializer | Sets the admin and the factory. |
+| `setStrategyImplementation(strategyImpl)` | `SET_IMPLEMENTATION_ROLE` | Pushes a new strategy implementation into the factory (future deploys use it; existing proxies are upgraded separately via their ProxyAdmin). |
+| `createStandaloneStrategy(fund, admin, proxyAdmin, roleHolders[])` | `CREATE_STRATEGY_ROLE` | Deploys a new StandaloneStrategy proxy via `factory.createFor` with `proxyAdmin` as the ProxyAdmin owner (upgrade authority, chosen per strategy) and initializes it. `fund` may be zero. |
 | `strategyCount()` / `strategyAt(i)` / `isStrategy(addr)` | view | Registry, backed by the factory's entity list. |
-| `factoryImplementation` / `standaloneStrategyImplementation` / `standaloneStrategyFactory` / `proxyAdmin` | view | Current wiring. |
+| `standaloneStrategyFactory` | view | The bound factory. |

@@ -94,7 +94,8 @@ Key conventions:
 - **Prices** are 1e18-scaled "asset per share": `shares = amount * 1e18 / price`.
 - **Native ETH** is supported everywhere assets are handled, via the sentinel `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`.
 - **Fees are paid in newly minted shares**, never in assets.
-- Requests are **cancellable until their batch settles**; claims never expire.
+- Users can submit **multiple requests per batch** — they accumulate into one request per (asset, batch, user).
+- Requests are **cancellable until their batch's cutoff** (minus an optional cancel-lock window); if a closed batch sits unsettled for 30 days, requesters can force-cancel out. Claims never expire.
 
 ## Repository layout
 

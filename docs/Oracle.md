@@ -67,14 +67,14 @@ A suspicious report is **not rejected** — it stays pending but can only be con
 
 | Function | Role | Description |
 |---|---|---|
-| `submitReport(reports[])` | `SUBMIT_REPORT_ROLE` | Submit `{asset, price}` pairs for the closed batch. Runs price-safety checks and stores pending reports with a `suspicious` flag. Reverts on zero price, batch not closed, or an already-accepted report for that asset+batch. Re-submitting overwrites a pending (unaccepted) report and resets its timer. |
+| `submitReport(reports[])` | `SUBMIT_REPORT_ROLE` | Submit `{asset, price}` pairs for the closed batch. Runs price-safety checks (result reported in the `ReportSubmitted` event) and stores pending reports. The `suspicious` flag itself is **not stored** — it is re-derived from the current safety config at read/accept time, so a mid-window `setPriceSafety` can never leave a stale flag behind. Reverts on zero price, batch not closed, or an already-accepted report for that asset+batch. Re-submitting overwrites a pending (unaccepted) report and resets its timer. |
 | `rejectReport(assets[])` | `REJECT_REPORT_ROLE` | Deletes pending reports for the listed assets so they can be resubmitted. |
 
 ### Fund-only (reached via `Fund.acceptReport*`)
 
 | Function | Access | Description |
 |---|---|---|
-| `acceptReport(assets[], nextCutoffTime)` | `onlyFund` | Verifies batch closed, **no suspicious pending report** among `assets`, and every asset is inside its accept window; consumes all pending reports, updates `lastAcceptedPrice`, advances the batch, sets the next cutoff. Returns `(batchId, prices[])`. |
+| `acceptReport(assets[], nextCutoffTime)` | `onlyFund` | Verifies batch closed, **no suspicious pending report** among `assets` (suspiciousness evaluated against the safety config at accept time), and every asset is inside its accept window; consumes all pending reports, updates `lastAcceptedPrice`, advances the batch, sets the next cutoff. Returns `(batchId, prices[])`. |
 | `acceptSuspiciousReport(assets[], nextCutoffTime)` | `onlyFund` | Same, but skips the suspicious check. |
 
 ### Admin setters (roles checked on the Fund)
@@ -82,7 +82,7 @@ A suspicious report is **not rejected** — it stays pending but can only be con
 | Function | Role | Description |
 |---|---|---|
 | `setPriceSafety(asset, safety)` / `setPriceSafetyBatch(safeties[])` | `SET_PRICE_SAFETY_ROLE` | Configure per-asset safety bounds. `maxDeviationBps ≤ 10000`, `minPrice ≤ maxPrice` when both set. |
-| `setNextCutoffTime(t)` | `SET_NEXT_CUTOFF_TIME_ROLE` | Move the current batch's cutoff (must be in the future). |
+| `setNextCutoffTime(t)` | `SET_NEXT_CUTOFF_TIME_ROLE` | Move the current batch's cutoff (must be in the future). Reverts (`BatchAlreadyClosed`) if the existing cutoff has already passed — a closed batch cannot be retroactively reopened. |
 | `setMinAcceptReportDelay(d)` | `SET_MIN_ACCEPT_REPORT_DELAY_ROLE` | Adjust the review window (≤ 30 days, ≤ max). |
 | `setMaxAcceptReportDelay(d)` | `SET_MAX_ACCEPT_REPORT_DELAY_ROLE` | Adjust the staleness limit (≤ 30 days, ≥ min). |
 
@@ -93,7 +93,7 @@ A suspicious report is **not rejected** — it stays pending but can only be con
 | `getCurrentBatchId()` | Batch id that new requests fall into (auto-advances at cutoff). |
 | `currentBatchId` / `nextCutoffTime` | Raw batch state. |
 | `getReport(asset, batchId)` | Accepted report (price) for a batch. |
-| `getPendingReport(asset, batchId)` | Pending report (`price`, `suspicious`, `submittedAt`). |
+| `getPendingReport(asset, batchId)` | Pending report (`price`, `suspicious`, `submittedAt`). `suspicious` is derived from the current price-safety config at read time. |
 | `lastAcceptedPrice(asset)` | Most recently accepted price — used by risk checks and deviation safety. |
 | `priceSafety(asset)` | Configured safety bounds. |
 | `minAcceptReportDelay` / `maxAcceptReportDelay` | Current accept window config. |

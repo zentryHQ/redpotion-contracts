@@ -43,12 +43,11 @@ sequenceDiagram
     F->>F: assets = union(deposit assets, redeem assets) + feeBaseAsset
     F->>O: acceptReport(assets, nextCutoffTime)
     O-->>F: (batchId, prices[]) — batch advances
+    F->>FM: getFeeConfigForBatch(batchId) — entry/exit fees this batch was quoted
+    F->>FM: accrueFees(totalSupply, basePrice, batchId)
+    FM-->>F: (feeRecipient, feeShares, protocolRecipient, protocolShares)
+    F->>S: mint fee shares
     loop for each asset
-        alt asset == feeBaseAsset
-            F->>FM: accrueFees(totalSupply, price)
-            FM-->>F: (feeRecipient, feeShares, protocolRecipient, protocolShares)
-            F->>S: mint fee shares
-        end
         F->>DQ: read batchDepositTotals(asset, batchId)
         F->>S: mint user shares → DepositQueue, entry-fee shares → feeRecipient
         F->>DQ: settleDeposit(asset, batchId, userShares) — assets move DQ → Fund
@@ -56,6 +55,8 @@ sequenceDiagram
         F->>S: burn redeemed shares, mint exit-fee shares → feeRecipient
     end
 ```
+
+Fees accrue **once, before any queue settlement**, so the management/performance fee base is the share supply that was invested over the elapsed period — this batch's deposit mints and redeem burns cannot leak into it. Entry/exit fees are read via `FeeManager.getFeeConfigForBatch(batchId)` before accrual (accrual promotes staged fee configs, after which the batch's rates would no longer be resolvable) — see [FeeManager](FeeManager.md).
 
 Share math (in `QueueModule`):
 - Deposit: `totalShares = depositAmount * 1e18 / price`, entry fee = `totalShares * entryFeeBps / 10000`, user gets the rest.
@@ -95,9 +96,10 @@ Once the Fund holds enough of the payout asset:
 | Function | Description |
 |---|---|
 | `protocolFeeRecipient()` | Live-resolves the protocol fee recipient via `FundManager → FundManagerDeployer`. |
-| `getRiskContext(asset, batchId)` | Aggregates everything [RiskManager](RiskManager.md) needs for a check: base/asset prices, high-water mark, entry/exit fee bps, share supply, and the batch's deposit/redeem totals valued in the base asset. |
+| `getRiskContext(asset, batchId)` | Aggregates everything [RiskManager](RiskManager.md) needs for a check: base/asset prices, high-water mark, entry/exit fee bps (quoted from the fee config effective for the batch currently open for requests), share supply, and the batch's deposit/redeem totals valued in the base asset. |
 | `share()` / `depositQueue()` / `redeemQueue()` / `oracle()` / `feeManager()` / `fundManager()` | Spoke addresses. |
 | `getCurrentBatchId()` | Passthrough to `Oracle.getCurrentBatchId()`. Queues read this through the Fund so they never need to know the Oracle. |
+| `getSettlingBatch()` | The batch awaiting settlement and its cutoff time (from the Oracle). Used by the queues' cancel-lock and force-cancel logic. |
 | `isStrategy(strategy)` | Whether an address is a registered strategy. |
 | `isExternalWallet(wallet)` / `getExternalWallets()` | External wallet whitelist. |
 

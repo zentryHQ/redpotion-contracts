@@ -6,7 +6,7 @@
 
 `RiskManager` enforces **deposit/redeem guardrails** for a fund. Both queues route every user request through `Fund.checkDeposit` / `Fund.checkRedeem`, which the Fund proxies here; a violated limit reverts the whole request.
 
-All value comparisons are made **in the fee base asset**: a deposit of asset X is first converted to shares at X's last accepted price, then valued at the base asset's price (`value = amount * 1e18 / assetPrice * basePrice / 1e18`). The valuation context comes from `Fund.getRiskContext` (see [Fund](Fund.md)).
+All value comparisons are made **in the fee base asset**: a deposit of asset X is valued at `value = amount * basePrice / assetPrice`, computed as a single full-precision division (a two-step share round-trip would floor twice and reject deposits worth exactly the minimum). The valuation context comes from `Fund.getRiskContext` (see [Fund](Fund.md)).
 
 Every limit is **optional — a zero value disables that check**. If no valuation-based check is enabled, price lookups are skipped entirely (deposits then work even without prices, e.g. the very first batch).
 
@@ -17,7 +17,7 @@ Every limit is **optional — a zero value disables that check**. If no valuatio
 | `maxDrawdownBps` | Blocks deposits when the base price has fallen more than this far below the high-water mark (protects new depositors from entering a drawdown, and existing holders from dilution at depressed prices). |
 | `minDepositAmount` / `minRedeemAmount` | Minimum request size, valued in the base asset. |
 | `maxBatchDepositCap` / `maxBatchRedeemCap` | Cap on total value queued per batch (existing batch total + this request). |
-| `tvlCap` | Cap on fund TVL (`shareSupply * basePrice / 1e18` + this deposit). Deposits only. |
+| `tvlCap` | Cap on fund TVL (`shareSupply * basePrice / 1e18` + the current batch's already-queued deposits + this deposit). Deposits only. |
 
 Note: checks run at **request time** against `lastAcceptedPrice`; the batch itself settles at the *next* accepted price.
 
@@ -38,6 +38,8 @@ Admin functions authorize against the **Fund's** access control (spoke pattern).
 |---|---|
 | `estimateDeposit(asset, amount)` | Shares the user would receive at current prices after entry fee. Returns 0 if no price. |
 | `estimateRedeem(asset, shares)` | Assets the user would receive at current prices after exit fee. Returns 0 if no price. |
+| `getMinDepositAmount(asset)` | Smallest `asset` amount that passes the minimum-deposit check at current prices (rounded up; 0 if no minimum configured). |
+| `getMinRedeemShares()` | Smallest share amount that passes the minimum-redeem check at the current base price (rounded up; 0 if no minimum configured). |
 
 Both are estimates only — actual settlement uses the next accepted report's price.
 
