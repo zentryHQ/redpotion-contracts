@@ -16,20 +16,14 @@ interface ICallValidator {
         bytes32[] constrainedValues;
     }
 
-    // Events
-
     event CallAdded(bytes32 indexed callHash, Call call_);
     event CallRemoved(bytes32 indexed callHash, Call call_);
     event ConstrainedCallAdded(bytes32 indexed callHash, ConstrainedCall call_);
     event ConstrainedCallRemoved(bytes32 indexed callHash, ConstrainedCall call_);
 
-    // Errors
-
     error CallNotAllowed();
     error CallAlreadyAllowed();
     error LengthMismatch();
-
-    // View functions
 
     function getCall(bytes32 callHash) external view returns (Call memory);
 
@@ -54,8 +48,6 @@ interface ICallValidator {
         uint256[] calldata constrainedOffsets,
         bytes32[] calldata constrainedValues
     ) external pure returns (bytes32);
-
-    // Mutable functions
 
     function addCalls(Call[] calldata calls_) external;
 

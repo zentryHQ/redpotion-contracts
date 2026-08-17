@@ -54,15 +54,9 @@ contract FundManagerDeployer is IFundManagerDeployer, ACLModule {
         _setProtocolFeeRecipient(protocolFeeRecipient_);
     }
 
-    // ========================================
-    // Role-gated: protocol fee recipient
-    // ========================================
-
     function setProtocolFeeRecipient(address recipient_) external onlyRole(SET_PROTOCOL_FEE_RECIPIENT_ROLE) {
         _setProtocolFeeRecipient(recipient_);
     }
-
-    // View functions
 
     function fundManagerCount() external view returns (uint256) {
         return fundManagerFactory.entityCount();
@@ -75,8 +69,6 @@ contract FundManagerDeployer is IFundManagerDeployer, ACLModule {
     function isFundManager(address entity) external view returns (bool) {
         return fundManagerFactory.isEntity(entity);
     }
-
-    // Mutable functions
 
     function setImplementations(
         address factoryImplementation_,
@@ -132,27 +124,15 @@ contract FundManagerDeployer is IFundManagerDeployer, ACLModule {
         if (owner_ == address(0)) revert ZeroAddress();
         if (proxyAdmin_ == address(0)) revert ZeroAddress();
 
-        // 1. Deploy 8 Factory proxies, each owned by this deployer initially
-        address fundFactory = _deployFactory();
-        address shareFactory = _deployFactory();
-        address depositQueueFactory = _deployFactory();
-        address redeemQueueFactory = _deployFactory();
-        address oracleFactory = _deployFactory();
-        address feeManagerFactory = _deployFactory();
-        address riskManagerFactory = _deployFactory();
-        address strategyFactory = _deployFactory();
+        address fundFactory = _deployConfiguredFactory(fundImplementation);
+        address shareFactory = _deployConfiguredFactory(shareImplementation);
+        address depositQueueFactory = _deployConfiguredFactory(depositQueueImplementation);
+        address redeemQueueFactory = _deployConfiguredFactory(redeemQueueImplementation);
+        address oracleFactory = _deployConfiguredFactory(oracleImplementation);
+        address feeManagerFactory = _deployConfiguredFactory(feeManagerImplementation);
+        address riskManagerFactory = _deployConfiguredFactory(riskManagerImplementation);
+        address strategyFactory = _deployConfiguredFactory(strategyImplementation);
 
-        // 2. Set entity implementations on each factory
-        IFactory(fundFactory).setImplementation(fundImplementation);
-        IFactory(shareFactory).setImplementation(shareImplementation);
-        IFactory(depositQueueFactory).setImplementation(depositQueueImplementation);
-        IFactory(redeemQueueFactory).setImplementation(redeemQueueImplementation);
-        IFactory(oracleFactory).setImplementation(oracleImplementation);
-        IFactory(feeManagerFactory).setImplementation(feeManagerImplementation);
-        IFactory(riskManagerFactory).setImplementation(riskManagerImplementation);
-        IFactory(strategyFactory).setImplementation(strategyImplementation);
-
-        // 3. Deploy FundManager via factory with proxyAdmin_ as the ProxyAdmin owner
         fundManager = fundManagerFactory.createFor(
             abi.encodeCall(
                 IFundManager.initialize,
@@ -161,7 +141,6 @@ contract FundManagerDeployer is IFundManagerDeployer, ACLModule {
             proxyAdmin_
         );
 
-        // 4. Transfer factory ProxyAdmin ownership to proxyAdmin_, logic ownership to FundManager
         _transferFactoryOwnership(fundFactory, proxyAdmin_, fundManager);
         _transferFactoryOwnership(shareFactory, proxyAdmin_, fundManager);
         _transferFactoryOwnership(depositQueueFactory, proxyAdmin_, fundManager);
@@ -203,6 +182,11 @@ contract FundManagerDeployer is IFundManagerDeployer, ACLModule {
         return address(uint160(uint256(keccak256(abi.encodePacked(
             bytes1(0xd6), bytes1(0x94), proxy, bytes1(0x01)
         )))));
+    }
+
+    function _deployConfiguredFactory(address entityImplementation) internal returns (address factory) {
+        factory = _deployFactory();
+        IFactory(factory).setImplementation(entityImplementation);
     }
 
     function _deployFactory() internal returns (address) {

@@ -23,7 +23,6 @@ interface IRiskManager {
         uint256 exitFeeBps;
     }
 
-    // Events
     event TvlCapUpdated(uint256 cap);
     event MaxBatchDepositCapUpdated(uint256 cap);
     event MaxBatchRedeemCapUpdated(uint256 cap);
@@ -35,7 +34,6 @@ interface IRiskManager {
     event MerkleRootUpdated(bytes32 root);
     event RiskManagerCreated(address indexed fund);
 
-    // Errors
     error OnlyFund();
     error ZeroAddress();
     error TvlCapExceeded();
@@ -50,7 +48,6 @@ interface IRiskManager {
     error NotWhitelisted();
     error InvalidDrawdownBps();
 
-    // Views
     function fund() external view returns (address);
     function tvlCap() external view returns (uint256);
     function maxBatchDepositCap() external view returns (uint256);
@@ -78,6 +75,11 @@ interface IRiskManager {
 
     function estimateDeposit(address asset, uint256 depositAmount) external view returns (uint256 shares);
     function estimateRedeem(address asset, uint256 redeemShares) external view returns (uint256 assetAmount);
+
+    /// @notice Smallest `asset` amount that passes checkDeposit's minimum, at current prices.
+    function getMinDepositAmount(address asset) external view returns (uint256);
+    /// @notice Smallest share amount that passes checkRedeem's minimum, at the current base price.
+    function getMinRedeemShares() external view returns (uint256);
 
     // Mutable (onlyFund)
     function initialize(address fund_, RiskConfig calldata config_) external;

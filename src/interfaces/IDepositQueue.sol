@@ -19,13 +19,14 @@ interface IDepositQueue {
         bool paused;
     }
 
-    // Events
-
+    /// @notice `amount` is this submission alone; `totalAmount` is the
+    /// investor's accumulated request for the batch after this submission.
     event DepositSubmitted(
         address indexed investor,
         address indexed asset,
         uint256 batchId,
-        uint256 amount
+        uint256 amount,
+        uint256 totalAmount
     );
     event DepositCancelled(
         address indexed investor,
@@ -53,13 +54,11 @@ interface IDepositQueue {
     event AssetUnpaused(address indexed asset);
     event FundUpdated(address indexed fund);
     event DepositQueueCreated(address indexed fund, address[] allowedAssets);
-
-    // Errors
+    event CancelLockWindowUpdated(uint256 window);
 
     error ZeroAddress();
     error ZeroAmount();
     error NoRequest();
-    error RequestExists();
     error BatchClosed();
     error BatchNotSettled();
     error AlreadySettled();
@@ -71,8 +70,8 @@ interface IDepositQueue {
     error DuplicateAsset();
     error FundExist();
     error InvalidETHAmount();
-
-    // View functions
+    error ForceCancelNotOpen();
+    error CancelLocked();
 
     function fund() external view returns (address);
 
@@ -104,8 +103,6 @@ interface IDepositQueue {
         address investor
     ) external view returns (DepositRequestInfo[] memory);
 
-    // Mutable functions
-
     function initialize(
         address fund_,
         address[] calldata allowedAssets_
@@ -116,6 +113,18 @@ interface IDepositQueue {
     function deposit(address asset, uint256 amount, bytes32[] calldata proof) external payable;
 
     function cancelDeposit(address asset) external;
+
+    function cancelLockWindow() external view returns (uint256);
+
+    /// @notice Sets how long before a batch's cutoff public cancellation is
+    /// frozen. Zero disables the lock.
+    function setCancelLockWindow(uint256 window) external;
+
+    /// @notice Escape hatch for a batch stuck past its cutoff: once
+    /// `FORCE_CANCEL_DELAY` has elapsed since the settling batch's cutoff
+    /// without a settlement, the request owner can reclaim their deposit
+    /// without operator involvement.
+    function forceCancelDeposit(address asset) external;
 
     /// @notice Called by Fund. Admin-cancels a user's deposit request in the
     /// current batch and refunds the original amount to the user.

@@ -60,10 +60,6 @@ contract Strategy is
         emit StrategyCreated(fund_);
     }
 
-    // ========================================
-    // Calls
-    // ========================================
-
     function call(
         address target,
         bytes calldata data
@@ -103,10 +99,6 @@ contract Strategy is
         return result;
     }
 
-    // ========================================
-    // Fund Actions
-    // ========================================
-
     receive() external payable {}
 
     function pullAsset(address asset, uint256 amount) external onlyFund {
@@ -114,10 +106,6 @@ contract Strategy is
         TransferHelper.transfer(asset, fund_, amount);
         emit AssetPulled(asset, amount);
     }
-
-    // ========================================
-    // Internal
-    // ========================================
 
     function _setFund(address fund_) internal {
         if (fund_ == address(0)) revert ZeroAddress();

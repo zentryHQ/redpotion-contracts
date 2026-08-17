@@ -11,11 +11,9 @@ interface IOracle {
         uint48 maxAcceptReportDelay;
     }
 
-    // Errors
     error OnlyFund();
     error ZeroAddress();
 
-    // Events
     event OracleCreated(address indexed fund);
 
     // Views (public, same as IReportModule)

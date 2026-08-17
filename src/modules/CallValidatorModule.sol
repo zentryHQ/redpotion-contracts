@@ -30,10 +30,6 @@ abstract contract CallValidatorModule is ICallValidator, ERC7201, ACLModule {
 
     error ZeroAddress();
 
-    // ========================================
-    // Call Management
-    // ========================================
-
     function addCalls(
         Call[] calldata calls_
     ) external onlyRole(ADD_ALLOWED_CALL_ROLE) {
@@ -110,10 +106,6 @@ abstract contract CallValidatorModule is ICallValidator, ERC7201, ACLModule {
         }
     }
 
-    // ========================================
-    // Internal — Validation
-    // ========================================
-
     function _isCallPermitted(
         address caller,
         address target,
@@ -153,10 +145,6 @@ abstract contract CallValidatorModule is ICallValidator, ERC7201, ACLModule {
         }
         return true;
     }
-
-    // ========================================
-    // Views
-    // ========================================
 
     function getCall(bytes32 callHash) external view returns (Call memory) {
         return _callValidatorStorage().calls[callHash];

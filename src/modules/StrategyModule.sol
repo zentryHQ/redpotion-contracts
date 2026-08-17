@@ -25,8 +25,6 @@ abstract contract StrategyModule is IStrategyModule, ModuleBase {
         _strategyStorage().fundManager = fundManager_;
     }
 
-    // --- Views ---
-
     /// @inheritdoc IStrategyModule
     function fundManager() public view returns (address) {
         return _strategyStorage().fundManager;
@@ -36,8 +34,6 @@ abstract contract StrategyModule is IStrategyModule, ModuleBase {
     function isStrategy(address strategy) public view returns (bool) {
         return _strategyStorage().isStrategy[strategy];
     }
-
-    // --- Mutable ---
 
     /// @inheritdoc IStrategyModule
     function createStrategy(

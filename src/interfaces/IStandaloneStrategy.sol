@@ -5,7 +5,6 @@ import "../modules/StrategyACLModule.sol";
 import "./ICallValidator.sol";
 
 interface IStandaloneStrategy is ICallValidator {
-    // Events
 
     event CallExecuted(
         address indexed caller,
@@ -18,16 +17,10 @@ interface IStandaloneStrategy is ICallValidator {
     event FundUpdated(address indexed fund);
     event StandaloneStrategyCreated(address indexed fund);
 
-    // Errors
-
     error CallFailed();
     error TargetNotAllowed();
 
-    // View functions
-
     function fund() external view returns (address);
-
-    // Mutable functions
 
     function initialize(
         address fund_,

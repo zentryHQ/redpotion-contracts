@@ -24,6 +24,12 @@ contract RedeemQueue is
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
+    /// @notice How long past its cutoff a batch may sit unsettled before
+    /// requesters can force-cancel out of it. Matches the oracle's hard cap
+    /// on the report-acceptance window, so a normally progressing settlement
+    /// is never preempted.
+    uint256 public constant FORCE_CANCEL_DELAY = 30 days;
+
     address public fund;
 
     function _fund() internal view override returns (address) {
@@ -57,6 +63,11 @@ contract RedeemQueue is
 
     /// @notice Per-asset pause state.
     mapping(address asset => bool) public isAssetPaused;
+
+    /// @notice How long before a batch's cutoff public cancellation is frozen.
+    /// Prevents reserving batch cap then cancelling for a free refund in the
+    /// final blocks. Zero disables the lock.
+    uint256 public cancelLockWindow;
 
     modifier onlyFund() {
         if (_msgSender() != fund) revert OnlyFund();
@@ -97,11 +108,28 @@ contract RedeemQueue is
                     break;
                 }
             }
-            if (!stillAllowed && batchRedeemTotals[oldAsset][currentBatchId] > 0) {
+            if (!stillAllowed && _hasUnsettledRedeems(oldAsset, currentBatchId)) {
                 revert AssetHasPendingRequests();
             }
         }
         _setAllowedAssets(assets_);
+    }
+
+    /// @dev `currentBatchId` is virtual: after the cutoff it already points at
+    /// the next batch while the closed batch may still await settlement.
+    /// Check the previous batch too — removing an asset with redeems in a
+    /// closed-but-unsettled batch would exclude it from settlement forever,
+    /// stranding the escrowed shares. Settled batches keep nonzero totals
+    /// (claim denominators), so they must not block removal.
+    function _hasUnsettledRedeems(
+        address asset,
+        uint256 currentBatchId
+    ) internal view returns (bool) {
+        if (batchRedeemTotals[asset][currentBatchId] > 0) return true;
+        return
+            currentBatchId > 0 &&
+            batchRedeemTotals[asset][currentBatchId - 1] > 0 &&
+            !_isBatchSettled(asset, currentBatchId - 1);
     }
 
     function pause() external onlyRole(PAUSE_REDEEM_ROLE) {
@@ -128,10 +156,6 @@ contract RedeemQueue is
         }
     }
 
-    // ========================================
-    // User Actions
-    // ========================================
-
     /// @inheritdoc IRedeemQueue
     function redeem(address asset, uint256 shares) external nonReentrant whenNotPaused {
         if (!_isAllowedAsset(asset)) revert UnsupportedAsset();
@@ -139,8 +163,6 @@ contract RedeemQueue is
         if (shares == 0) revert ZeroAmount();
 
         uint256 batchId = IFund(fund).getCurrentBatchId();
-        if (_redeemRequests[asset][batchId][_msgSender()].shares != 0)
-            revert RequestExists();
 
         address shareToken = IFund(fund).share();
         IERC20(shareToken).safeTransferFrom(
@@ -151,14 +173,16 @@ contract RedeemQueue is
 
         IFund(fund).checkRedeem(batchId, shares);
 
-        _redeemRequests[asset][batchId][_msgSender()] = RedeemRequest({
-            shares: shares,
-            timestamp: uint48(block.timestamp)
-        });
+        // Repeat submissions in the same batch accumulate into one request:
+        // everything in a batch settles at the same price, so per-submission
+        // records would add bookkeeping without changing anyone's outcome.
+        RedeemRequest storage request = _redeemRequests[asset][batchId][_msgSender()];
+        request.shares += shares;
+        request.timestamp = uint48(block.timestamp);
         batchRedeemTotals[asset][batchId] += shares;
         _userRedeems[_msgSender()].add(_encodeAssetBatch(asset, batchId));
 
-        emit RedeemSubmitted(_msgSender(), asset, batchId, shares);
+        emit RedeemSubmitted(_msgSender(), asset, batchId, shares, request.shares);
     }
 
 
@@ -166,6 +190,35 @@ contract RedeemQueue is
     /// @inheritdoc IRedeemQueue
     function cancelRedeem(address asset) external nonReentrant whenNotPaused {
         uint256 batchId = IFund(fund).getCurrentBatchId();
+        (uint256 settlingBatchId, uint48 cutoffTime) = IFund(fund).getSettlingBatch();
+        // The lock only bites while the batch being cancelled is the open batch
+        // this cutoff governs. Past the cutoff `getCurrentBatchId` advances
+        // ahead of the settling batch, so the now-passed cutoff no longer
+        // applies to it.
+        if (
+            batchId == settlingBatchId &&
+            cutoffTime != 0 &&
+            block.timestamp + cancelLockWindow >= uint256(cutoffTime)
+        ) revert CancelLocked();
+        _cancelRedeem(asset, batchId, _msgSender());
+    }
+
+    /// @inheritdoc IRedeemQueue
+    function setCancelLockWindow(uint256 window) external onlyRole(SET_CANCEL_LOCK_WINDOW_ROLE) {
+        cancelLockWindow = window;
+        emit CancelLockWindowUpdated(window);
+    }
+
+    /// @inheritdoc IRedeemQueue
+    /// @dev Deliberately not pause-gated: the hatch must work when the
+    /// operator is absent or hostile. Racing a late settlement stays
+    /// consistent — acceptance advances the settling batch (closing the
+    /// window) and `_cancelRedeem` shrinks the totals settlement reads.
+    function forceCancelRedeem(address asset) external nonReentrant {
+        (uint256 batchId, uint48 cutoffTime) = IFund(fund).getSettlingBatch();
+        if (cutoffTime == 0 || block.timestamp < uint256(cutoffTime) + FORCE_CANCEL_DELAY)
+            revert ForceCancelNotOpen();
+        if (_isBatchSettled(asset, batchId)) revert AlreadySettled();
         _cancelRedeem(asset, batchId, _msgSender());
     }
 
@@ -212,17 +265,12 @@ contract RedeemQueue is
         delete _redeemRequests[asset][batchId][_msgSender()];
         _userRedeems[_msgSender()].remove(_encodeAssetBatch(asset, batchId));
 
-        // Pro-rata share of the batch's funded assets
         uint256 userAssets = (redeemShares * totalAssets) / totalRedeems;
 
         TransferHelper.transfer(asset, _msgSender(), userAssets);
 
         emit RedeemClaimed(_msgSender(), asset, batchId, userAssets);
     }
-
-    // ========================================
-    // Fund Actions
-    // ========================================
 
     /// @inheritdoc IRedeemQueue
     function settleRedeem(
@@ -270,10 +318,6 @@ contract RedeemQueue is
     }
 
 
-    // ========================================
-    // Internal
-    // ========================================
-
     function _isBatchSettled(address asset, uint256 batchId) internal view returns (bool) {
         return isBatchFunded[asset][batchId] ||
             _unfundedBatches.contains(_encodeAssetBatch(asset, batchId));
@@ -313,10 +357,6 @@ contract RedeemQueue is
         asset = address(uint160(uint256(encoded) >> 96));
         batchId = uint256(uint96(uint256(encoded)));
     }
-
-    // ========================================
-    // Views
-    // ========================================
 
     /// @inheritdoc IRedeemQueue
     function getAllowedAssets() external view returns (address[] memory) {

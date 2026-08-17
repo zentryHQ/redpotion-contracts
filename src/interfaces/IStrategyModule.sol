@@ -4,20 +4,16 @@ pragma solidity 0.8.34;
 import "../modules/ACLModule.sol";
 
 interface IStrategyModule {
-    // Events
     event StrategyAdded(address indexed strategy);
     event StrategyRemoved(address indexed strategy);
     event AssetPushedToStrategy(address indexed strategy, address indexed asset, uint256 amount);
     event AssetPulledFromStrategy(address indexed strategy, address indexed asset, uint256 amount);
 
-    // Errors
     error InvalidStrategy();
 
-    // Views
     function fundManager() external view returns (address);
     function isStrategy(address strategy) external view returns (bool);
 
-    // Mutable
     function createStrategy(
         address admin_,
         ACLModule.RoleHolder[] memory roleHolders_

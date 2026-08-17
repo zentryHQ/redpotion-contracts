@@ -2,17 +2,12 @@
 pragma solidity 0.8.34;
 
 interface IFactory {
-    // Events
 
     event ImplementationSet(address indexed implementation, uint256 version);
     event EntityCreated(address indexed entity, uint256 indexed version);
 
-    // Errors
-
     error NoImplementation();
     error ZeroAddress();
-
-    // View functions
 
     /// @notice Returns the current implementation address used for new proxies.
     function implementation() external view returns (address);
@@ -28,8 +23,6 @@ interface IFactory {
 
     /// @notice Returns true if the address was deployed by this factory.
     function isEntity(address entity) external view returns (bool);
-
-    // Mutable functions
 
     function initialize(address owner_) external;
 

@@ -40,9 +40,11 @@ abstract contract OracleModule is IOracleModule, ModuleBase {
         return IOracle(_oracleStorage().oracle).getCurrentBatchId();
     }
 
-    // ========================================
-    // Internal helpers used by Fund orchestration
-    // ========================================
+    /// @inheritdoc IOracleModule
+    function getSettlingBatch() external view returns (uint256 batchId, uint48 cutoffTime) {
+        IOracle oracleContract = IOracle(_oracleStorage().oracle);
+        return (oracleContract.currentBatchId(), oracleContract.nextCutoffTime());
+    }
 
     function _getReport(
         address asset,

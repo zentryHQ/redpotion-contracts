@@ -50,10 +50,6 @@ contract StandaloneStrategy is
         emit StandaloneStrategyCreated(fund_);
     }
 
-    // ========================================
-    // Calls
-    // ========================================
-
     function call(
         address target,
         bytes calldata data
@@ -93,10 +89,6 @@ contract StandaloneStrategy is
         return result;
     }
 
-    // ========================================
-    // Asset Recovery
-    // ========================================
-
     receive() external payable {}
 
     function pullAsset(
@@ -108,10 +100,6 @@ contract StandaloneStrategy is
         TransferHelper.transfer(asset, to, amount);
         emit AssetPulled(asset, to, amount);
     }
-
-    // ========================================
-    // Internal
-    // ========================================
 
     function _setFund(address fund_) internal {
         _standaloneStrategyStorage().fund = fund_;

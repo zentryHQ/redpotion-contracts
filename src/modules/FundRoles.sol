@@ -48,4 +48,5 @@ abstract contract FundRoles {
     bytes32 public constant SET_WHITELIST_ROLE = keccak256("SET_WHITELIST_ROLE");
     bytes32 public constant CANCEL_DEPOSIT_REQUEST_ROLE = keccak256("CANCEL_DEPOSIT_REQUEST_ROLE");
     bytes32 public constant CANCEL_REDEEM_REQUEST_ROLE = keccak256("CANCEL_REDEEM_REQUEST_ROLE");
+    bytes32 public constant SET_CANCEL_LOCK_WINDOW_ROLE = keccak256("SET_CANCEL_LOCK_WINDOW_ROLE");
 }

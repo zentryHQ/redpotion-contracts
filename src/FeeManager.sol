@@ -23,6 +23,7 @@ contract FeeManager is
     uint256 public lastFeeAccrual;
     address public feeRecipient;
     uint256 public protocolFeeBps;
+    PendingFeeConfig[] private _pendingFeeConfigs;
 
     modifier onlyFund() {
         if (_msgSender() != fund) revert OnlyFund();
@@ -53,16 +54,13 @@ contract FeeManager is
         fund = fund_;
         _setFeeRecipient(feeRecipient_);
         _setFeeBaseAsset(feeBaseAsset_);
+        _validateFeeConfig(feeConfig_);
         _setFeeConfig(feeConfig_);
         _setLastFeeAccrual(block.timestamp);
         emit FeeManagerCreated(fund_);
     }
 
-    // ========================================
-    // Views
-    // ========================================
-
-    function getFeeConfig() external view returns (FeeConfig memory) {
+    function getFeeConfig() public view returns (FeeConfig memory) {
         return FeeConfig({
             entryFeeBps: entryFeeBps,
             exitFeeBps: exitFeeBps,
@@ -72,12 +70,38 @@ contract FeeManager is
         });
     }
 
-    // ========================================
-    // Role-gated: admin setters
-    // ========================================
+    /// @inheritdoc IFeeManager
+    function getPendingFeeConfigs() external view returns (PendingFeeConfig[] memory) {
+        return _pendingFeeConfigs;
+    }
 
+    /// @inheritdoc IFeeManager
+    function getFeeConfigForBatch(uint256 batchId) public view returns (FeeConfig memory) {
+        for (uint256 i = _pendingFeeConfigs.length; i > 0; i--) {
+            PendingFeeConfig storage pending = _pendingFeeConfigs[i - 1];
+            if (pending.effectiveBatchId <= batchId) return pending.config;
+        }
+        return getFeeConfig();
+    }
+
+    /// @dev Fee changes never touch a batch that is already open for
+    /// requests: they take effect from the next batch to open, which cannot
+    /// contain requests yet. Restaging for a boundary that already has an
+    /// entry replaces that entry; once the batch opens, a new staging targets
+    /// the following batch, so every request settles at the config it was
+    /// quoted.
     function setFeeConfig(FeeConfig calldata config) external onlyRole(SET_FEES_ROLE) {
-        _setFeeConfig(config);
+        _validateFeeConfig(config);
+        uint256 effectiveBatchId = IFund(fund).getCurrentBatchId() + 1;
+        for (uint256 i = 0; i < _pendingFeeConfigs.length; i++) {
+            if (_pendingFeeConfigs[i].effectiveBatchId == effectiveBatchId) {
+                _pendingFeeConfigs[i].config = config;
+                emit FeeConfigPending(config, effectiveBatchId);
+                return;
+            }
+        }
+        _pendingFeeConfigs.push(PendingFeeConfig({config: config, effectiveBatchId: effectiveBatchId}));
+        emit FeeConfigPending(config, effectiveBatchId);
     }
 
     function setFeeRecipient(address feeRecipient_) external onlyRole(SET_FEE_RECIPIENT_ROLE) {
@@ -88,19 +112,15 @@ contract FeeManager is
         _setFeeBaseAsset(asset);
     }
 
-    // ========================================
-    // Fund-only: fee accrual
-    // ========================================
-
     /// @inheritdoc IFeeManager
     function accrueFees(
         uint256 totalSupply,
-        uint256 newPrice
+        uint256 newPrice,
+        uint256 batchId
     ) external onlyFund returns (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) {
         recipient = feeRecipient;
         uint256 elapsed = block.timestamp - lastFeeAccrual;
 
-        // Management fee
         if (managementFeeBps != 0 && totalSupply != 0 && elapsed > 0) {
             uint256 mgmtShares = (totalSupply * managementFeeBps * elapsed) /
                 (10000 * 365 days);
@@ -108,7 +128,6 @@ contract FeeManager is
             if (mgmtShares > 0) emit ManagementFeeAccrued(mgmtShares);
         }
 
-        // Performance fee
         if (performanceFeeBps != 0 && totalSupply != 0) {
             if (highWaterMark == 0) {
                 _setHighWaterMark(newPrice);
@@ -136,18 +155,39 @@ contract FeeManager is
         }
 
         _setLastFeeAccrual(block.timestamp);
+        _promotePendingFeeConfigs(batchId);
     }
 
-    // ========================================
-    // Internals
-    // ========================================
+    /// @dev Settling `batchId` is the boundary where configs staged for
+    /// `batchId + 1` become active. Staged configs never target the batch
+    /// being settled, so the accrual that just ran always used the rates in
+    /// force over the elapsed period. Promoted entries are trimmed so the
+    /// array only holds upcoming changes.
+    function _promotePendingFeeConfigs(uint256 batchId) internal {
+        uint256 length = _pendingFeeConfigs.length;
+        uint256 promoted = 0;
+        while (promoted < length && _pendingFeeConfigs[promoted].effectiveBatchId <= batchId + 1) {
+            _setFeeConfig(_pendingFeeConfigs[promoted].config);
+            promoted++;
+        }
+        if (promoted == 0) return;
+        for (uint256 i = promoted; i < length; i++) {
+            _pendingFeeConfigs[i - promoted] = _pendingFeeConfigs[i];
+        }
+        for (uint256 i = 0; i < promoted; i++) {
+            _pendingFeeConfigs.pop();
+        }
+    }
 
-    function _setFeeConfig(FeeConfig calldata config) internal {
+    function _validateFeeConfig(FeeConfig calldata config) internal pure {
         if (config.entryFeeBps > 10000) revert EntryFeeTooHigh();
         if (config.exitFeeBps > 10000) revert ExitFeeTooHigh();
         if (config.managementFeeBps > 10000) revert ManagementFeeTooHigh();
         if (config.performanceFeeBps > 10000) revert PerformanceFeeTooHigh();
         if (config.protocolFeeBps > 10000) revert ProtocolFeeTooHigh();
+    }
+
+    function _setFeeConfig(FeeConfig memory config) internal {
         entryFeeBps = config.entryFeeBps;
         exitFeeBps = config.exitFeeBps;
         managementFeeBps = config.managementFeeBps;
@@ -158,6 +198,13 @@ contract FeeManager is
 
     function _setFeeBaseAsset(address asset) internal {
         if (asset == address(0)) revert ZeroAddress();
+        // The high-water mark is a share price denominated in the fee base
+        // asset, so it is meaningless in the new denomination. Reset it so the
+        // next accrual seeds a fresh mark at the new asset's price instead of
+        // minting phantom performance fees or tripping the drawdown check.
+        if (asset != feeBaseAsset && highWaterMark != 0) {
+            _setHighWaterMark(0);
+        }
         feeBaseAsset = asset;
         emit FeeBaseAssetUpdated(asset);
     }

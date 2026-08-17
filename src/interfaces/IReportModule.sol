@@ -2,7 +2,6 @@
 pragma solidity 0.8.34;
 
 interface IReportModule {
-    // Structs
     struct Report {
         uint256 price;
     }
@@ -18,9 +17,19 @@ interface IReportModule {
         bool suspicious;
     }
 
+    /// @dev View shape of an in-flight report (getPendingReport). `suspicious`
+    /// is derived from the current price-safety config at read time.
     struct PendingReport {
         uint256 price;
         bool suspicious;
+        uint48 submittedAt;
+    }
+
+    /// @dev Storage shape of an in-flight report. `suspicious` is intentionally
+    /// not stored: deriving it at accept/read time means a mid-window
+    /// setPriceSafety can never leave a stale flag behind.
+    struct StoredPendingReport {
+        uint256 price;
         uint48 submittedAt;
     }
 
@@ -43,7 +52,6 @@ interface IReportModule {
         PriceSafety safety;
     }
 
-    // Events
     event ReportSubmitted(uint256 indexed batchId, ReportResult[] results);
     event ReportAccepted(uint256 indexed batchId, address indexed asset);
     event ReportRejected(uint256 indexed batchId, address[] assets);
@@ -52,10 +60,10 @@ interface IReportModule {
     event MinAcceptReportDelayUpdated(uint48 delay);
     event MaxAcceptReportDelayUpdated(uint48 delay);
 
-    // Errors
     error ZeroPrice();
     error InvalidCutoffTime();
     error BatchNotClosed();
+    error BatchAlreadyClosed();
     error BatchAlreadySettled();
     error NoPendingReport();
     error SuspiciousReportPending();
@@ -70,7 +78,6 @@ interface IReportModule {
     error AbsoluteDeltaTooHigh();
     error InvalidPriceSafety();
 
-    // Views
     function currentBatchId() external view returns (uint256);
     function nextCutoffTime() external view returns (uint48);
     function priceSafety(address asset) external view returns (PriceSafety memory);
@@ -81,7 +88,6 @@ interface IReportModule {
     function getReport(address asset, uint256 batchId) external view returns (Report memory);
     function getPendingReport(address asset, uint256 batchId) external view returns (PendingReport memory);
 
-    // Mutable
     function setPriceSafety(address asset, PriceSafety calldata safety) external;
     function setPriceSafetyBatch(PriceSafetyInit[] calldata safeties) external;
     function setNextCutoffTime(uint48 nextCutoffTime_) external;

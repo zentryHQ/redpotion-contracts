@@ -4,6 +4,7 @@ pragma solidity 0.8.34;
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./interfaces/IRiskManager.sol";
 import "./interfaces/IFund.sol";
@@ -60,10 +61,6 @@ contract RiskManager is
         emit RiskManagerCreated(fund_);
     }
 
-    // ========================================
-    // Validation (view, called by Fund proxy)
-    // ========================================
-
     /// @inheritdoc IRiskManager
     function checkDeposit(
         address depositor,
@@ -94,8 +91,9 @@ contract RiskManager is
 
         if (ctx.assetPrice == 0) revert DepositAssetPriceUnavailable();
 
-        uint256 estimatedShares = (depositAmount * 1e18) / ctx.assetPrice;
-        uint256 depositValueInBase = (estimatedShares * ctx.basePrice) / 1e18;
+        // Single full-precision division: a share round-trip floors twice and
+        // rejects deposits worth exactly minDepositAmount.
+        uint256 depositValueInBase = Math.mulDiv(depositAmount, ctx.basePrice, ctx.assetPrice);
 
         if (minDepositAmount != 0 && depositValueInBase < minDepositAmount) {
             revert DepositBelowMinimum();
@@ -107,7 +105,7 @@ contract RiskManager is
 
         if (tvlCap != 0) {
             uint256 currentTvl = (ctx.shareSupply * ctx.basePrice) / 1e18;
-            if (currentTvl + depositValueInBase > tvlCap) revert TvlCapExceeded();
+            if (currentTvl + ctx.batchDepositTotalInBase + depositValueInBase > tvlCap) revert TvlCapExceeded();
         }
     }
 
@@ -134,10 +132,6 @@ contract RiskManager is
             if (ctx.batchRedeemTotalInBase + redeemValueInBase > maxBatchRedeemCap) revert BatchRedeemCapExceeded();
         }
     }
-
-    // ========================================
-    // Estimates
-    // ========================================
 
     /// @inheritdoc IRiskManager
     function estimateDeposit(
@@ -167,9 +161,26 @@ contract RiskManager is
         assetAmount = (netShares * ctx.assetPrice) / 1e18;
     }
 
-    // ========================================
-    // Role-gated: admin setters
-    // ========================================
+    /// @inheritdoc IRiskManager
+    function getMinDepositAmount(address asset) external view returns (uint256) {
+        if (minDepositAmount == 0) return 0;
+
+        IRiskManager.RiskContext memory ctx = IFund(fund).getRiskContext(asset, 0);
+        if (ctx.basePrice == 0) revert BaseAssetPriceUnavailable();
+        if (ctx.assetPrice == 0) revert DepositAssetPriceUnavailable();
+
+        return Math.mulDiv(minDepositAmount, ctx.assetPrice, ctx.basePrice, Math.Rounding.Ceil);
+    }
+
+    /// @inheritdoc IRiskManager
+    function getMinRedeemShares() external view returns (uint256) {
+        if (minRedeemAmount == 0) return 0;
+
+        IRiskManager.RiskContext memory ctx = IFund(fund).getRiskContext(address(0), 0);
+        if (ctx.basePrice == 0) revert BaseAssetPriceUnavailable();
+
+        return Math.mulDiv(minRedeemAmount, 1e18, ctx.basePrice, Math.Rounding.Ceil);
+    }
 
     /// @inheritdoc IRiskManager
     function setTvlCap(uint256 cap) external onlyRole(SET_TVL_CAP_ROLE) { _setTvlCap(cap); }
@@ -203,10 +214,6 @@ contract RiskManager is
 
     /// @inheritdoc IRiskManager
     function setMerkleRoot(bytes32 root) external onlyRole(SET_WHITELIST_ROLE) { _setMerkleRoot(root); }
-
-    // ========================================
-    // Internal helpers
-    // ========================================
 
     function _setTvlCap(uint256 cap) internal { tvlCap = cap; emit TvlCapUpdated(cap); }
     function _setMaxBatchDepositCap(uint256 cap) internal { maxBatchDepositCap = cap; emit MaxBatchDepositCapUpdated(cap); }

@@ -5,7 +5,6 @@ import "../modules/StrategyACLModule.sol";
 import "./ICallValidator.sol";
 
 interface IStrategy is ICallValidator {
-    // Events
 
     event CallExecuted(
         address indexed caller,
@@ -18,17 +17,11 @@ interface IStrategy is ICallValidator {
     event FundUpdated(address indexed fund);
     event StrategyCreated(address indexed fund);
 
-    // Errors
-
     error CallFailed();
     error TargetNotAllowed();
     error OnlyFund();
 
-    // View functions
-
     function fund() external view returns (address);
-
-    // Mutable functions
 
     function initialize(
         address fund_,

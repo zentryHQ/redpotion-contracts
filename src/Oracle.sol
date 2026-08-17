@@ -27,7 +27,7 @@ contract Oracle is
     uint48 public maxAcceptReportDelay;
 
     mapping(address asset => mapping(uint256 batchId => IReportModule.Report)) private _batchReports;
-    mapping(address asset => mapping(uint256 batchId => IReportModule.PendingReport)) private _pendingReports;
+    mapping(address asset => mapping(uint256 batchId => IReportModule.StoredPendingReport)) private _pendingReports;
     mapping(address asset => uint256) public lastAcceptedPrice;
     mapping(address asset => IReportModule.PriceSafety) private _priceSafety;
 
@@ -68,10 +68,6 @@ contract Oracle is
         emit OracleCreated(fund_);
     }
 
-    // ========================================
-    // Views
-    // ========================================
-
     function priceSafety(address asset) external view returns (IReportModule.PriceSafety memory) {
         return _priceSafety[asset];
     }
@@ -94,12 +90,13 @@ contract Oracle is
         address asset,
         uint256 batchId
     ) external view returns (IReportModule.PendingReport memory) {
-        return _pendingReports[asset][batchId];
+        IReportModule.StoredPendingReport storage pending = _pendingReports[asset][batchId];
+        return IReportModule.PendingReport({
+            price: pending.price,
+            suspicious: pending.price != 0 && _checkPriceSafety(asset, pending.price),
+            submittedAt: pending.submittedAt
+        });
     }
-
-    // ========================================
-    // Role-gated: Submit / Reject
-    // ========================================
 
     /// @inheritdoc IOracle
     function submitReport(
@@ -120,9 +117,8 @@ contract Oracle is
 
             bool suspicious = _checkPriceSafety(asset, price);
 
-            _pendingReports[asset][batchId] = IReportModule.PendingReport({
+            _pendingReports[asset][batchId] = IReportModule.StoredPendingReport({
                 price: price,
-                suspicious: suspicious,
                 submittedAt: uint48(block.timestamp)
             });
 
@@ -150,10 +146,6 @@ contract Oracle is
         emit IReportModule.ReportRejected(batchId, assets);
     }
 
-    // ========================================
-    // Fund-only: Accept (orchestration)
-    // ========================================
-
     /// @inheritdoc IOracle
     function acceptReport(
         address[] calldata assets,
@@ -161,13 +153,13 @@ contract Oracle is
     ) external onlyFund nonReentrant returns (uint256 batchId, uint256[] memory prices) {
         _requireBatchClosed();
         batchId = currentBatchId;
+        _requireAcceptWindow(assets, batchId);
 
         for (uint256 i = 0; i < assets.length; i++) {
-            if (_pendingReports[assets[i]][batchId].suspicious)
+            if (_checkPriceSafety(assets[i], _pendingReports[assets[i]][batchId].price))
                 revert IReportModule.SuspiciousReportPending();
         }
 
-        _requireAcceptWindow(assets, batchId);
         prices = _consumeAndAdvance(assets, batchId, nextCutoffTime_);
     }
 
@@ -181,10 +173,6 @@ contract Oracle is
         _requireAcceptWindow(assets, batchId);
         prices = _consumeAndAdvance(assets, batchId, nextCutoffTime_);
     }
-
-    // ========================================
-    // Role-gated: Admin setters
-    // ========================================
 
     /// @inheritdoc IOracle
     function setPriceSafety(
@@ -205,6 +193,8 @@ contract Oracle is
 
     /// @inheritdoc IOracle
     function setNextCutoffTime(uint48 nextCutoffTime_) external onlyRole(SET_NEXT_CUTOFF_TIME_ROLE) {
+        if (nextCutoffTime != 0 && block.timestamp >= nextCutoffTime)
+            revert IReportModule.BatchAlreadyClosed();
         _setNextCutoffTime(nextCutoffTime_);
     }
 
@@ -217,10 +207,6 @@ contract Oracle is
     function setMaxAcceptReportDelay(uint48 delay) external onlyRole(SET_MAX_ACCEPT_REPORT_DELAY_ROLE) {
         _setMaxAcceptReportDelay(delay);
     }
-
-    // ========================================
-    // Internals
-    // ========================================
 
     function _requireBatchClosed() internal view {
         if (nextCutoffTime == 0 || block.timestamp < nextCutoffTime)
@@ -253,7 +239,7 @@ contract Oracle is
         address asset,
         uint256 batchId
     ) internal returns (uint256 price) {
-        IReportModule.PendingReport storage pending = _pendingReports[asset][batchId];
+        IReportModule.StoredPendingReport storage pending = _pendingReports[asset][batchId];
         price = pending.price;
         if (price == 0) revert IReportModule.NoPendingReport();
 

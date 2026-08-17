@@ -2,6 +2,7 @@
 pragma solidity 0.8.34;
 
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./interfaces/IFund.sol";
 import "./interfaces/IFundShare.sol";
@@ -65,10 +66,6 @@ contract Fund is
         __StrategyModule_init(fundManager_);
     }
 
-    // ========================================
-    // Aggregate-read view
-    // ========================================
-
     /// @inheritdoc IFund
     function protocolFeeRecipient() external view returns (address) {
         return IFundManager(fundManager()).protocolFeeRecipient();
@@ -86,8 +83,11 @@ contract Fund is
         ctx.basePrice = o.lastAcceptedPrice(baseAsset);
         ctx.assetPrice = o.lastAcceptedPrice(asset);
         ctx.highWaterMark = fm.highWaterMark();
-        ctx.entryFeeBps = fm.entryFeeBps();
-        ctx.exitFeeBps = fm.exitFeeBps();
+        // Quote the fees a request submitted now would actually settle at —
+        // the config effective for the batch currently open for requests.
+        IFeeManager.FeeConfig memory quotedFeeConfig = fm.getFeeConfigForBatch(o.getCurrentBatchId());
+        ctx.entryFeeBps = quotedFeeConfig.entryFeeBps;
+        ctx.exitFeeBps = quotedFeeConfig.exitFeeBps;
         ctx.shareSupply = IFundShare(share()).totalSupply();
 
         address dq = depositQueue();
@@ -97,8 +97,9 @@ contract Fund is
             if (assetTotal == 0) continue;
             uint256 assetPrice = o.lastAcceptedPrice(depositAssets[i]);
             if (assetPrice == 0) continue;
-            uint256 shares_ = (assetTotal * 1e18) / assetPrice;
-            ctx.batchDepositTotalInBase += (shares_ * ctx.basePrice) / 1e18;
+            // Single full-precision division — must round the same way as the
+            // per-deposit value in RiskManager.checkDeposit.
+            ctx.batchDepositTotalInBase += Math.mulDiv(assetTotal, ctx.basePrice, assetPrice);
         }
 
         address rq = redeemQueue();
@@ -109,10 +110,6 @@ contract Fund is
             ctx.batchRedeemTotalInBase += (shares_ * ctx.basePrice) / 1e18;
         }
     }
-
-    // ========================================
-    // Orchestrated entrypoints
-    // ========================================
 
     function acceptReport(
         uint48 nextCutoffTime_
@@ -130,10 +127,6 @@ contract Fund is
         _settleAll(assets, prices, batchId);
     }
 
-    // ========================================
-    // Fund redeem
-    // ========================================
-
     /// @inheritdoc IFund
     /// @dev Uses the asset-payout snapshot recorded by `settleRedeem` at
     /// acceptance time, so later admin changes to exit fee or price cannot
@@ -149,10 +142,6 @@ contract Fund is
         IRedeemQueue(rq).fundRedeem(asset, batchId);
     }
 
-    // ========================================
-    // Internal orchestration
-    // ========================================
-
     /// @dev Returns the union of deposit + redeem allowed assets, plus the
     /// fee base asset if it's not already in either set. The fee base asset
     /// must always have a report so management + performance fees can accrue.
@@ -164,6 +153,11 @@ contract Fund is
         return AssetSet.add(assets, _feeBaseAsset());
     }
 
+    /// @dev Fees accrue before any settlement so the management/performance
+    /// fee base is the supply that was invested over the elapsed period —
+    /// independent of the base asset's position in `assets`. Settling first
+    /// would let this batch's deposit mints and redeem burns leak into the
+    /// fee base.
     function _settleAll(
         address[] memory assets,
         uint256[] memory prices,
@@ -171,32 +165,29 @@ contract Fund is
     ) internal {
         address shareToken = share();
         address baseAsset = _feeBaseAsset();
-        uint256 entryFeeBps = _entryFeeBps();
-        uint256 exitFeeBps = _exitFeeBps();
-        address feeRecipient_;
+        // Must be read before `_accrueFees`: accrual promotes configs staged
+        // for the next batch into the active config, after which the
+        // FeeManager can no longer resolve this batch's rates.
+        IFeeManager.FeeConfig memory feeConfig = _feeConfigForBatch(batchId);
+        address feeRecipient_ = _feeRecipient();
 
         for (uint256 i = 0; i < assets.length; i++) {
-            address asset = assets[i];
-            uint256 price = prices[i];
-
-            if (asset == baseAsset) {
-                uint256 totalSupply = IFundShare(shareToken).totalSupply();
-                (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) = _accrueFees(totalSupply, price);
-                feeRecipient_ = recipient;
-                if (feeShares > 0) {
-                    IFundShare(shareToken).mint(recipient, feeShares);
-                }
-                if (protocolFeeShares > 0) {
-                    IFundShare(shareToken).mint(protocolRecipient, protocolFeeShares);
-                }
+            if (assets[i] != baseAsset) continue;
+            uint256 totalSupply = IFundShare(shareToken).totalSupply();
+            (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) = _accrueFees(totalSupply, prices[i], batchId);
+            feeRecipient_ = recipient;
+            if (feeShares > 0) {
+                IFundShare(shareToken).mint(recipient, feeShares);
             }
-
-            if (feeRecipient_ == address(0)) {
-                feeRecipient_ = _feeRecipient();
+            if (protocolFeeShares > 0) {
+                IFundShare(shareToken).mint(protocolRecipient, protocolFeeShares);
             }
+            break;
+        }
 
-            _settleDeposits(asset, batchId, price, shareToken, feeRecipient_, entryFeeBps);
-            _settleRedeems(asset, batchId, price, shareToken, feeRecipient_, exitFeeBps);
+        for (uint256 i = 0; i < assets.length; i++) {
+            _settleDeposits(assets[i], batchId, prices[i], shareToken, feeRecipient_, feeConfig.entryFeeBps);
+            _settleRedeems(assets[i], batchId, prices[i], shareToken, feeRecipient_, feeConfig.exitFeeBps);
         }
     }
 }

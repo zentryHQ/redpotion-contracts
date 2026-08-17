@@ -24,6 +24,12 @@ contract DepositQueue is
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
+    /// @notice How long past its cutoff a batch may sit unsettled before
+    /// requesters can force-cancel out of it. Matches the oracle's hard cap
+    /// on the report-acceptance window, so a normally progressing settlement
+    /// is never preempted.
+    uint256 public constant FORCE_CANCEL_DELAY = 30 days;
+
     address public fund;
 
     function _fund() internal view override returns (address) {
@@ -54,6 +60,10 @@ contract DepositQueue is
     /// @notice Whether a batch has been settled for a given asset.
     mapping(address asset => mapping(uint256 batchId => bool)) private _batchSettled;
 
+    /// @notice How long before a batch's cutoff public cancellation is frozen.
+    /// Prevents reserving batch cap then cancelling for a free refund in the
+    /// final blocks. Zero disables the lock.
+    uint256 public cancelLockWindow;
 
     modifier onlyFund() {
         if (_msgSender() != fund) revert OnlyFund();
@@ -94,11 +104,28 @@ contract DepositQueue is
                     break;
                 }
             }
-            if (!stillAllowed && batchDepositTotals[oldAsset][currentBatchId] > 0) {
+            if (!stillAllowed && _hasUnsettledDeposits(oldAsset, currentBatchId)) {
                 revert AssetHasPendingRequests();
             }
         }
         _setAllowedAssets(assets_);
+    }
+
+    /// @dev `currentBatchId` is virtual: after the cutoff it already points at
+    /// the next batch while the closed batch may still await settlement.
+    /// Check the previous batch too — removing an asset with deposits in a
+    /// closed-but-unsettled batch would exclude it from settlement forever,
+    /// stranding the depositors. Settled batches keep nonzero totals (claim
+    /// denominators), so they must not block removal.
+    function _hasUnsettledDeposits(
+        address asset,
+        uint256 currentBatchId
+    ) internal view returns (bool) {
+        if (batchDepositTotals[asset][currentBatchId] > 0) return true;
+        return
+            currentBatchId > 0 &&
+            batchDepositTotals[asset][currentBatchId - 1] > 0 &&
+            !_isBatchSettled(asset, currentBatchId - 1);
     }
 
     function pause() external onlyRole(PAUSE_DEPOSIT_ROLE) {
@@ -125,10 +152,6 @@ contract DepositQueue is
         }
     }
 
-    // ========================================
-    // User Actions
-    // ========================================
-
     /// @inheritdoc IDepositQueue
     function deposit(address asset, uint256 amount, bytes32[] calldata proof) external payable nonReentrant whenNotPaused {
         if (!_isAllowedAsset(asset)) revert UnsupportedAsset();
@@ -142,20 +165,20 @@ contract DepositQueue is
         }
 
         uint256 batchId = IFund(fund).getCurrentBatchId();
-        if (_depositRequests[asset][batchId][_msgSender()].amount != 0)
-            revert RequestExists();
 
         IFund(fund).checkDeposit(_msgSender(), asset, batchId, amount, proof);
         TransferHelper.transferFrom(asset, _msgSender(), address(this), amount);
 
-        _depositRequests[asset][batchId][_msgSender()] = DepositRequest({
-            amount: amount,
-            timestamp: uint48(block.timestamp)
-        });
+        // Repeat submissions in the same batch accumulate into one request:
+        // everything in a batch settles at the same price, so per-submission
+        // records would add bookkeeping without changing anyone's outcome.
+        DepositRequest storage request = _depositRequests[asset][batchId][_msgSender()];
+        request.amount += amount;
+        request.timestamp = uint48(block.timestamp);
         batchDepositTotals[asset][batchId] += amount;
         _userDeposits[_msgSender()].add(_encodeAssetBatch(asset, batchId));
 
-        emit DepositSubmitted(_msgSender(), asset, batchId, amount);
+        emit DepositSubmitted(_msgSender(), asset, batchId, amount, request.amount);
     }
 
 
@@ -163,6 +186,35 @@ contract DepositQueue is
     /// @inheritdoc IDepositQueue
     function cancelDeposit(address asset) external nonReentrant whenNotPaused {
         uint256 batchId = IFund(fund).getCurrentBatchId();
+        (uint256 settlingBatchId, uint48 cutoffTime) = IFund(fund).getSettlingBatch();
+        // The lock only bites while the batch being cancelled is the open batch
+        // this cutoff governs. Past the cutoff `getCurrentBatchId` advances
+        // ahead of the settling batch, so the now-passed cutoff no longer
+        // applies to it.
+        if (
+            batchId == settlingBatchId &&
+            cutoffTime != 0 &&
+            block.timestamp + cancelLockWindow >= uint256(cutoffTime)
+        ) revert CancelLocked();
+        _cancelDeposit(asset, batchId, _msgSender());
+    }
+
+    /// @inheritdoc IDepositQueue
+    function setCancelLockWindow(uint256 window) external onlyRole(SET_CANCEL_LOCK_WINDOW_ROLE) {
+        cancelLockWindow = window;
+        emit CancelLockWindowUpdated(window);
+    }
+
+    /// @inheritdoc IDepositQueue
+    /// @dev Deliberately not pause-gated: the hatch must work when the
+    /// operator is absent or hostile. Racing a late settlement stays
+    /// consistent — acceptance advances the settling batch (closing the
+    /// window) and `_cancelDeposit` shrinks the totals settlement reads.
+    function forceCancelDeposit(address asset) external nonReentrant {
+        (uint256 batchId, uint48 cutoffTime) = IFund(fund).getSettlingBatch();
+        if (cutoffTime == 0 || block.timestamp < uint256(cutoffTime) + FORCE_CANCEL_DELAY)
+            revert ForceCancelNotOpen();
+        if (_isBatchSettled(asset, batchId)) revert AlreadySettled();
         _cancelDeposit(asset, batchId, _msgSender());
     }
 
@@ -208,7 +260,6 @@ contract DepositQueue is
         delete _depositRequests[asset][batchId][_msgSender()];
         _userDeposits[_msgSender()].remove(_encodeAssetBatch(asset, batchId));
 
-        // Pro-rata share of the batch's minted shares
         uint256 userShares = (depositAmount * totalShares) / totalDeposits;
 
         address shareToken = IFund(fund).share();
@@ -216,10 +267,6 @@ contract DepositQueue is
 
         emit DepositClaimed(_msgSender(), asset, batchId, userShares);
     }
-
-    // ========================================
-    // Fund Actions
-    // ========================================
 
     /// @inheritdoc IDepositQueue
     function settleDeposit(
@@ -230,12 +277,10 @@ contract DepositQueue is
         if (_isBatchSettled(asset, batchId)) revert AlreadySettled();
         uint256 totalDeposits = batchDepositTotals[asset][batchId];
 
-        // Transfer all deposited assets to Fund
         if (totalDeposits > 0) {
             TransferHelper.transfer(asset, fund, totalDeposits);
         }
 
-        // Record shares for pro-rata distribution
         batchShareTotals[asset][batchId] = sharesToMint;
         _batchSettled[asset][batchId] = true;
 
@@ -248,10 +293,6 @@ contract DepositQueue is
         emit AssetPulled(asset, amount);
     }
 
-
-    // ========================================
-    // Internal
-    // ========================================
 
     function _isBatchSettled(address asset, uint256 batchId) internal view returns (bool) {
         return _batchSettled[asset][batchId];
@@ -291,10 +332,6 @@ contract DepositQueue is
         asset = address(uint160(uint256(encoded) >> 96));
         batchId = uint256(uint96(uint256(encoded)));
     }
-
-    // ========================================
-    // Views
-    // ========================================
 
     /// @inheritdoc IDepositQueue
     function getAllowedAssets() external view returns (address[] memory) {

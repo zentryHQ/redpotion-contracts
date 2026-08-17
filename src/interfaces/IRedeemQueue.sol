@@ -24,13 +24,14 @@ interface IRedeemQueue {
         uint256 batchId;
     }
 
-    // Events
-
+    /// @notice `shares` is this submission alone; `totalShares` is the
+    /// investor's accumulated request for the batch after this submission.
     event RedeemSubmitted(
         address indexed investor,
         address indexed asset,
         uint256 batchId,
-        uint256 shares
+        uint256 shares,
+        uint256 totalShares
     );
     event RedeemCancelled(
         address indexed investor,
@@ -63,13 +64,11 @@ interface IRedeemQueue {
     event AssetUnpaused(address indexed asset);
     event FundUpdated(address indexed fund);
     event RedeemQueueCreated(address indexed fund, address[] allowedAssets);
-
-    // Errors
+    event CancelLockWindowUpdated(uint256 window);
 
     error ZeroAddress();
     error ZeroAmount();
     error NoRequest();
-    error RequestExists();
     error BatchClosed();
     error BatchNotFunded();
     error NothingToClaim();
@@ -82,8 +81,8 @@ interface IRedeemQueue {
     error NotSettled();
     error AlreadyFunded();
     error AlreadySettled();
-
-    // View functions
+    error ForceCancelNotOpen();
+    error CancelLocked();
 
     function fund() external view returns (address);
 
@@ -122,8 +121,6 @@ interface IRedeemQueue {
 
     function getUnfundedBatches() external view returns (UnfundedBatch[] memory);
 
-    // Mutable functions
-
     function initialize(
         address fund_,
         address[] calldata allowedAssets_
@@ -134,6 +131,18 @@ interface IRedeemQueue {
     function redeem(address asset, uint256 shares) external;
 
     function cancelRedeem(address asset) external;
+
+    function cancelLockWindow() external view returns (uint256);
+
+    /// @notice Sets how long before a batch's cutoff public cancellation is
+    /// frozen. Zero disables the lock.
+    function setCancelLockWindow(uint256 window) external;
+
+    /// @notice Escape hatch for a batch stuck past its cutoff: once
+    /// `FORCE_CANCEL_DELAY` has elapsed since the settling batch's cutoff
+    /// without a settlement, the request owner can reclaim their escrowed
+    /// shares without operator involvement.
+    function forceCancelRedeem(address asset) external;
 
     /// @notice Called by Fund. Admin-cancels a user's redeem request in the
     /// current batch and refunds the original shares to the user.

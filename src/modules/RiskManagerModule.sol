@@ -25,10 +25,6 @@ abstract contract RiskManagerModule is IRiskManagerModule, ModuleBase {
         _riskManagerStorage().riskManager = riskManager_;
     }
 
-    // ========================================
-    // Queue-facing validation thin proxies
-    // ========================================
-
     /// @dev Called by DepositQueue.deposit. The queue passes the end-user's
     /// address (its own `_msgSender()`) as `depositor` so whitelist checks
     /// apply to the actual depositor, not the queue contract.

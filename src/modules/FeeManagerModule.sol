@@ -36,10 +36,6 @@ abstract contract FeeManagerModule is IFeeManagerModule, ModuleBase {
         emit FeeManagerUpdated(feeManager_);
     }
 
-    // ========================================
-    // Internal helpers used by Fund orchestration
-    // ========================================
-
     function _feeBaseAsset() internal view returns (address) {
         return IFeeManager(_feeManagerStorage().feeManager).feeBaseAsset();
     }
@@ -48,20 +44,17 @@ abstract contract FeeManagerModule is IFeeManagerModule, ModuleBase {
         return IFeeManager(_feeManagerStorage().feeManager).feeRecipient();
     }
 
-    function _entryFeeBps() internal view returns (uint256) {
-        return IFeeManager(_feeManagerStorage().feeManager).entryFeeBps();
-    }
-
-    function _exitFeeBps() internal view returns (uint256) {
-        return IFeeManager(_feeManagerStorage().feeManager).exitFeeBps();
+    function _feeConfigForBatch(uint256 batchId) internal view returns (IFeeManager.FeeConfig memory) {
+        return IFeeManager(_feeManagerStorage().feeManager).getFeeConfigForBatch(batchId);
     }
 
     /// @dev Calls FeeManager to compute + update fee state. Returns fund
     /// recipient + shares and protocol recipient + shares. Fund does the minting.
     function _accrueFees(
         uint256 totalSupply,
-        uint256 newPrice
+        uint256 newPrice,
+        uint256 batchId
     ) internal returns (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) {
-        return IFeeManager(_feeManagerStorage().feeManager).accrueFees(totalSupply, newPrice);
+        return IFeeManager(_feeManagerStorage().feeManager).accrueFees(totalSupply, newPrice, batchId);
     }
 }

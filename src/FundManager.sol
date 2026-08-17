@@ -4,6 +4,7 @@ pragma solidity 0.8.34;
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "./modules/FundManagerACLModule.sol";
 import "./interfaces/IFundManager.sol";
@@ -234,10 +235,8 @@ contract FundManager is IFundManager, ContextUpgradeable, FundManagerACLModule, 
         if (params.proxyAdmin == address(0)) revert ZeroAddress();
         if (params.feeRecipient == address(0)) revert ZeroAddress();
 
-        // Deploy Fund proxy with proxyAdmin as ProxyAdmin owner
         fund = fundFactory.createFor(bytes(""), params.proxyAdmin);
 
-        // All spoke ProxyAdmins owned by proxyAdmin
         share = shareFactory.createFor(
             abi.encodeCall(IFundShare.initialize, (params.shareName, params.shareSymbol, fund)),
             params.proxyAdmin
@@ -293,5 +292,6 @@ contract FundManager is IFundManager, ContextUpgradeable, FundManagerACLModule, 
         );
 
         emit FundCreated(fund, share, depositQueue, redeemQueue, oracle_, feeManager_, riskManager_, params.admin);
+        emit FundShareCreated(fund, share, params.shareName, params.shareSymbol, IERC20Metadata(share).decimals());
     }
 }

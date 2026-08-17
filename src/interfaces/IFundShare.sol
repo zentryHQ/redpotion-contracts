@@ -4,17 +4,12 @@ pragma solidity 0.8.34;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IFundShare is IERC20 {
-    // Errors
 
     error OnlyFund();
     error ZeroAddress();
 
-    // View functions
-
     /// @notice Returns the Fund contract that owns this share token.
     function fund() external view returns (address);
-
-    // Mutable functions
 
     function initialize(
         string memory name_,

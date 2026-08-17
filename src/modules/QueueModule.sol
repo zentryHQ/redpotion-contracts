@@ -36,8 +36,6 @@ abstract contract QueueModule is IQueueModule, ModuleBase {
         _setRedeemQueue(redeemQueue_);
     }
 
-    // --- Views ---
-
     /// @inheritdoc IQueueModule
     function share() public view returns (address) {
         return _queueStorage().share;
@@ -52,10 +50,6 @@ abstract contract QueueModule is IQueueModule, ModuleBase {
     function redeemQueue() public view returns (address) {
         return _queueStorage().redeemQueue;
     }
-
-    // ========================================
-    // Settlement helpers (called by orchestrator)
-    // ========================================
 
     /// @dev Mints user shares to the deposit queue, mints fee shares to
     /// `feeRecipient_`, and tells the queue to settle the batch. Caller is
@@ -113,8 +107,6 @@ abstract contract QueueModule is IQueueModule, ModuleBase {
         emit RedeemSettled(asset, batchId, redeemTotal, feeShares);
     }
 
-    // --- Share Math (reusable by estimates) ---
-
     function _calcDepositShares(
         uint256 depositAmount,
         uint256 price,
@@ -141,8 +133,6 @@ abstract contract QueueModule is IQueueModule, ModuleBase {
         (uint256 netShares, ) = _calcRedeemShares(redeemShares, exitFeeBps);
         assetAmount = (netShares * price) / 1e18;
     }
-
-    // --- Internal Setters ---
 
     function _setShare(address share_) internal {
         if (share_ == address(0)) revert ZeroAddress();

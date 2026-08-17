@@ -21,8 +21,6 @@ contract Factory is IFactory, OwnableUpgradeable {
         __Ownable_init(owner_);
     }
 
-    // View functions
-
     function entityCount() external view returns (uint256) {
         return _entities.length;
     }
@@ -30,8 +28,6 @@ contract Factory is IFactory, OwnableUpgradeable {
     function entityAt(uint256 index) external view returns (address) {
         return _entities[index];
     }
-
-    // Mutable functions
 
     /// @inheritdoc IFactory
     function setImplementation(

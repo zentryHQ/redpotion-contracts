@@ -12,7 +12,6 @@ import "../modules/ACLModule.sol";
 import "../modules/FundACLModule.sol";
 
 interface IFundManager {
-    // Events
 
     event FundCreated(
         address indexed fund,
@@ -23,6 +22,13 @@ interface IFundManager {
         address feeManager,
         address riskManager,
         address indexed admin
+    );
+    event FundShareCreated(
+        address indexed fund,
+        address indexed share,
+        string name,
+        string symbol,
+        uint8 decimals
     );
     event FundFactoryUpdated(address indexed fundFactory);
     event ShareFactoryUpdated(address indexed shareFactory);
@@ -52,13 +58,9 @@ interface IFundManager {
         address strategyFactory
     );
 
-    // Errors
-
     error ZeroAddress();
     error InvalidCaller();
 
-
-    // View functions
 
     function fundFactory() external view returns (IFactory);
     function shareFactory() external view returns (IFactory);
@@ -70,8 +72,6 @@ interface IFundManager {
     function strategyFactory() external view returns (IFactory);
     function deployer() external view returns (address);
     function protocolFeeRecipient() external view returns (address);
-
-    // Mutable functions
 
     function initialize(
         address owner_,
