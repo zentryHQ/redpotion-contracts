@@ -10,7 +10,7 @@
 - Receives **price reports** (asset price per share, 1e18-scaled) from an off-chain reporter, holds them as *pending* through a review window, and flags **suspicious** prices using configurable safety bounds.
 - Releases accepted prices to the [Fund](Fund.md) during settlement and stores `lastAcceptedPrice` per asset.
 
-Prices use the convention `shares = amount * 1e18 / price` — i.e. `price` is the amount of that asset corresponding to one share (1e18 share-units).
+Prices use the convention `shares = amount * 1e18 / price` — i.e. `price` is the amount of that asset corresponding to one share (1e18 share-units). `amount` is in the asset's **raw units**, so the reported price must be too: a $1.00 share priced in 6-decimal USDC is reported as `1e6`, not `1e18`.
 
 Admin/reporter functions authorize against the **Fund's** access control (spoke pattern). The accept functions are `onlyFund` — they can only be reached through `Fund.acceptReport` / `Fund.acceptSuspiciousReport`, which adds the settlement orchestration on top.
 
