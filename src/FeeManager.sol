@@ -117,15 +117,13 @@ contract FeeManager is
         uint256 totalSupply,
         uint256 newPrice,
         uint256 batchId
-    ) external onlyFund returns (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) {
-        recipient = feeRecipient;
+    ) external onlyFund returns (FeeAccrualResult memory result) {
+        result.recipient = feeRecipient;
         uint256 elapsed = block.timestamp - lastFeeAccrual;
 
         if (managementFeeBps != 0 && totalSupply != 0 && elapsed > 0) {
-            uint256 mgmtShares = (totalSupply * managementFeeBps * elapsed) /
+            result.managementFeeShares = (totalSupply * managementFeeBps * elapsed) /
                 (10000 * 365 days);
-            feeShares += mgmtShares;
-            if (mgmtShares > 0) emit ManagementFeeAccrued(mgmtShares);
         }
 
         if (performanceFeeBps != 0 && totalSupply != 0) {
@@ -133,11 +131,10 @@ contract FeeManager is
                 _setHighWaterMark(newPrice);
             } else if (newPrice > highWaterMark) {
                 uint256 gain = newPrice - highWaterMark;
-                uint256 perfShares = (totalSupply * gain * performanceFeeBps) /
+                result.performanceFeeShares = (totalSupply * gain * performanceFeeBps) /
                     (newPrice * 10000);
-                feeShares += perfShares;
+                result.newHighWaterMark = newPrice;
                 _setHighWaterMark(newPrice);
-                if (perfShares > 0) emit PerformanceFeeAccrued(perfShares, newPrice);
             }
         }
 
@@ -147,10 +144,9 @@ contract FeeManager is
         if (protocolFeeBps != 0 && totalSupply != 0 && elapsed > 0) {
             address protocolFeeRecipient_ = IFund(fund).protocolFeeRecipient();
             if (protocolFeeRecipient_ != address(0)) {
-                protocolFeeShares = (totalSupply * protocolFeeBps * elapsed) /
+                result.protocolFeeShares = (totalSupply * protocolFeeBps * elapsed) /
                     (10000 * 365 days);
-                protocolRecipient = protocolFeeRecipient_;
-                if (protocolFeeShares > 0) emit ProtocolFeeAccrued(protocolFeeShares);
+                result.protocolRecipient = protocolFeeRecipient_;
             }
         }
 
@@ -167,10 +163,10 @@ contract FeeManager is
         uint256 length = _pendingFeeConfigs.length;
         uint256 promoted = 0;
         while (promoted < length && _pendingFeeConfigs[promoted].effectiveBatchId <= batchId + 1) {
-            _setFeeConfig(_pendingFeeConfigs[promoted].config);
             promoted++;
         }
         if (promoted == 0) return;
+        _setFeeConfig(_pendingFeeConfigs[promoted - 1].config);
         for (uint256 i = promoted; i < length; i++) {
             _pendingFeeConfigs[i - promoted] = _pendingFeeConfigs[i];
         }

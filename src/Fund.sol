@@ -174,13 +174,14 @@ contract Fund is
         for (uint256 i = 0; i < assets.length; i++) {
             if (assets[i] != baseAsset) continue;
             uint256 totalSupply = IFundShare(shareToken).totalSupply();
-            (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) = _accrueFees(totalSupply, prices[i], batchId);
-            feeRecipient_ = recipient;
+            IFeeManager.FeeAccrualResult memory feeAccrual = _accrueFees(totalSupply, prices[i], batchId);
+            feeRecipient_ = feeAccrual.recipient;
+            uint256 feeShares = feeAccrual.managementFeeShares + feeAccrual.performanceFeeShares;
             if (feeShares > 0) {
-                IFundShare(shareToken).mint(recipient, feeShares);
+                IFundShare(shareToken).mint(feeAccrual.recipient, feeShares);
             }
-            if (protocolFeeShares > 0) {
-                IFundShare(shareToken).mint(protocolRecipient, protocolFeeShares);
+            if (feeAccrual.protocolFeeShares > 0) {
+                IFundShare(shareToken).mint(feeAccrual.protocolRecipient, feeAccrual.protocolFeeShares);
             }
             break;
         }

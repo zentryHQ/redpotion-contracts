@@ -102,7 +102,7 @@ contract Oracle is
     function submitReport(
         IReportModule.ReportSubmission[] calldata reports
     ) external onlyRole(SUBMIT_REPORT_ROLE) {
-        if (block.timestamp < nextCutoffTime) revert IReportModule.BatchNotClosed();
+        _requireBatchClosed();
         uint256 batchId = currentBatchId;
 
         IReportModule.ReportResult[] memory results = new IReportModule.ReportResult[](reports.length);
@@ -132,8 +132,7 @@ contract Oracle is
     function rejectReport(
         address[] calldata assets
     ) external onlyRole(REJECT_REPORT_ROLE) {
-        if (nextCutoffTime == 0 || block.timestamp < nextCutoffTime)
-            revert IReportModule.BatchNotClosed();
+        _requireBatchClosed();
         uint256 batchId = currentBatchId;
 
         for (uint256 i = 0; i < assets.length; i++) {

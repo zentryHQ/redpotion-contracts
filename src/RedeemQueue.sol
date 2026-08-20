@@ -392,26 +392,22 @@ contract RedeemQueue is
         uint256 currentBatchId = IFund(fund).getCurrentBatchId();
         uint256 assetCount = _allowedAssets.length;
 
+        RedeemRequestInfo[] memory result = new RedeemRequestInfo[](assetCount);
         uint256 count;
-        for (uint256 i = 0; i < assetCount; i++) {
-            if (_redeemRequests[_allowedAssets[i]][currentBatchId][investor].shares > 0) {
-                count++;
-            }
-        }
-
-        RedeemRequestInfo[] memory result = new RedeemRequestInfo[](count);
-        uint256 idx;
         for (uint256 i = 0; i < assetCount; i++) {
             address asset = _allowedAssets[i];
             RedeemRequest storage req = _redeemRequests[asset][currentBatchId][investor];
             if (req.shares > 0) {
-                result[idx++] = RedeemRequestInfo({
+                result[count++] = RedeemRequestInfo({
                     asset: asset,
                     batchId: currentBatchId,
                     shares: req.shares,
                     timestamp: req.timestamp
                 });
             }
+        }
+        assembly ("memory-safe") {
+            mstore(result, count)
         }
         return result;
     }
@@ -424,27 +420,22 @@ contract RedeemQueue is
         uint256 len = redeems.length();
         uint256 currentBatchId = IFund(fund).getCurrentBatchId();
 
+        RedeemRequestInfo[] memory result = new RedeemRequestInfo[](len);
         uint256 count;
         for (uint256 i = 0; i < len; i++) {
             (address asset, uint256 batchId) = _decodeAssetBatch(redeems.at(i));
             if (batchId < currentBatchId && isBatchFunded[asset][batchId]) {
-                count++;
-            }
-        }
-
-        RedeemRequestInfo[] memory result = new RedeemRequestInfo[](count);
-        uint256 idx;
-        for (uint256 i = 0; i < len; i++) {
-            (address asset, uint256 batchId) = _decodeAssetBatch(redeems.at(i));
-            if (batchId < currentBatchId && isBatchFunded[asset][batchId]) {
                 RedeemRequest storage req = _redeemRequests[asset][batchId][investor];
-                result[idx++] = RedeemRequestInfo({
+                result[count++] = RedeemRequestInfo({
                     asset: asset,
                     batchId: batchId,
                     shares: req.shares,
                     timestamp: req.timestamp
                 });
             }
+        }
+        assembly ("memory-safe") {
+            mstore(result, count)
         }
         return result;
     }

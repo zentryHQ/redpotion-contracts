@@ -59,7 +59,6 @@ interface IDepositQueue {
     error ZeroAddress();
     error ZeroAmount();
     error NoRequest();
-    error BatchClosed();
     error BatchNotSettled();
     error AlreadySettled();
     error NothingToClaim();

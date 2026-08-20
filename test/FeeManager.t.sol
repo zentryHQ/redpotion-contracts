@@ -153,14 +153,14 @@ contract FeeManagerTest is Test {
 
         vm.warp(deployTimestamp + 365 days);
         vm.prank(address(fundMock));
-        (, uint256 feeShares, , ) = feeManager.accrueFees(TOTAL_SUPPLY, PRICE, 0);
-        assertEq(feeShares, 0, "elapsed period accrues at the old zero management fee");
+        IFeeManager.FeeAccrualResult memory result = feeManager.accrueFees(TOTAL_SUPPLY, PRICE, 0);
+        assertEq(result.managementFeeShares, 0, "elapsed period accrues at the old zero management fee");
         assertEq(feeManager.managementFeeBps(), 1000, "new rate active from the next batch");
 
         vm.warp(deployTimestamp + 730 days);
         vm.prank(address(fundMock));
-        (, feeShares, , ) = feeManager.accrueFees(TOTAL_SUPPLY, PRICE, 1);
-        assertEq(feeShares, TOTAL_SUPPLY / 10, "next period accrues at the promoted rate");
+        result = feeManager.accrueFees(TOTAL_SUPPLY, PRICE, 1);
+        assertEq(result.managementFeeShares, TOTAL_SUPPLY / 10, "next period accrues at the promoted rate");
     }
 
     /// @dev Stages a performance fee, promotes it, and accrues once so the
@@ -185,8 +185,8 @@ contract FeeManagerTest is Test {
 
         uint256 newDenominationPrice = 100_000 ether;
         vm.prank(address(fundMock));
-        (, uint256 feeShares, , ) = feeManager.accrueFees(TOTAL_SUPPLY, newDenominationPrice, 2);
-        assertEq(feeShares, 0, "no phantom performance fee after the switch");
+        IFeeManager.FeeAccrualResult memory result = feeManager.accrueFees(TOTAL_SUPPLY, newDenominationPrice, 2);
+        assertEq(result.performanceFeeShares, 0, "no phantom performance fee after the switch");
         assertEq(feeManager.highWaterMark(), newDenominationPrice, "mark reseeded at the new asset's price");
     }
 

@@ -12,6 +12,7 @@ import {DepositQueue} from "../src/DepositQueue.sol";
 import {RedeemQueue} from "../src/RedeemQueue.sol";
 import {Oracle} from "../src/Oracle.sol";
 import {IFeeManager} from "../src/interfaces/IFeeManager.sol";
+import {IFeeManagerModule} from "../src/interfaces/IFeeManagerModule.sol";
 import {IQueueModule} from "../src/interfaces/IQueueModule.sol";
 import {IReportModule} from "../src/interfaces/IReportModule.sol";
 import {ACLModule} from "../src/modules/ACLModule.sol";
@@ -239,20 +240,18 @@ contract FundSettlementTest is Test {
         // reachable from the pre-settlement supply — must precede every
         // queue settlement, including the secondary asset settled before the
         // fee base asset's position in the asset list.
-        vm.expectEmit(address(feeManager));
-        emit IFeeManager.ManagementFeeAccrued(expectations.managementFeeShares);
-        vm.expectEmit(address(feeManager));
-        emit IFeeManager.PerformanceFeeAccrued(expectations.performanceFeeShares, RAISED_BASE_PRICE);
-        vm.expectEmit(address(feeManager));
-        emit IFeeManager.ProtocolFeeAccrued(expectations.protocolFeeShares);
         vm.expectEmit(address(fund));
-        emit IQueueModule.DepositSettled(
-            address(secondaryAsset), MAIN_BATCH_ID, expectations.depositUserShares, expectations.entryFeeShares
+        emit IFeeManagerModule.ManagementFeeAccrued(MAIN_BATCH_ID, expectations.managementFeeShares);
+        vm.expectEmit(address(fund));
+        emit IFeeManagerModule.PerformanceFeeAccrued(
+            MAIN_BATCH_ID, expectations.performanceFeeShares, RAISED_BASE_PRICE
         );
         vm.expectEmit(address(fund));
-        emit IQueueModule.RedeemSettled(
-            address(baseAsset), MAIN_BATCH_ID, PENDING_REDEEM_SHARES, expectations.exitFeeShares
-        );
+        emit IFeeManagerModule.ProtocolFeeAccrued(MAIN_BATCH_ID, expectations.protocolFeeShares);
+        vm.expectEmit(address(fund));
+        emit IQueueModule.EntryFeeAccrued(address(secondaryAsset), MAIN_BATCH_ID, expectations.entryFeeShares);
+        vm.expectEmit(address(fund));
+        emit IQueueModule.ExitFeeAccrued(address(baseAsset), MAIN_BATCH_ID, expectations.exitFeeShares);
 
         fund.acceptReport(uint48(block.timestamp + 1 days));
     }

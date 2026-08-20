@@ -8,10 +8,12 @@ import "./IModuleErrors.sol";
 /// call DepositQueue/RedeemQueue directly; both spokes auth via role
 /// callback to Fund's access control.
 interface IQueueModule is IModuleErrors {
-    // Settlement events (emitted by Fund during _settleAll orchestration)
     event ShareUpdated(address indexed share);
-    event DepositSettled(address indexed asset, uint256 indexed batchId, uint256 userShares, uint256 feeShares);
-    event RedeemSettled(address indexed asset, uint256 indexed batchId, uint256 redeemTotal, uint256 feeShares);
+
+    // Entry/exit fee accruals emitted by Fund during _settleAll
+    // orchestration; batch totals are on the queues' *Settled events.
+    event EntryFeeAccrued(address indexed asset, uint256 indexed batchId, uint256 feeShares);
+    event ExitFeeAccrued(address indexed asset, uint256 indexed batchId, uint256 feeShares);
 
     // Views — stored addresses the queues and other spokes need to resolve
     function share() external view returns (address);

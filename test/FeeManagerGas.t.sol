@@ -90,18 +90,18 @@ contract FeeManagerGasTest is Test {
     function test_gas_accrueFees_fullPath() public {
         vm.prank(address(fundMock));
         uint256 gasBefore = gasleft();
-        (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) =
-            feeManager.accrueFees(TOTAL_SUPPLY, NEW_PRICE, 0);
+        IFeeManager.FeeAccrualResult memory result = feeManager.accrueFees(TOTAL_SUPPLY, NEW_PRICE, 0);
         uint256 gasUsed = gasBefore - gasleft();
 
+        uint256 feeShares = result.managementFeeShares + result.performanceFeeShares;
         console2.log("accrueFees full-path gas:", gasUsed);
         console2.log("  feeShares:", feeShares);
-        console2.log("  protocolFeeShares:", protocolFeeShares);
+        console2.log("  protocolFeeShares:", result.protocolFeeShares);
 
-        assertEq(recipient, FEE_RECIPIENT, "fee recipient");
-        assertEq(protocolRecipient, PROTOCOL_FEE_RECIPIENT, "protocol fee recipient");
+        assertEq(result.recipient, FEE_RECIPIENT, "fee recipient");
+        assertEq(result.protocolRecipient, PROTOCOL_FEE_RECIPIENT, "protocol fee recipient");
         assertGt(feeShares, 0, "fund fees accrued");
-        assertGt(protocolFeeShares, 0, "protocol fees accrued");
+        assertGt(result.protocolFeeShares, 0, "protocol fees accrued");
     }
 
     function test_gas_accrueFees_warmSecondCall() public {

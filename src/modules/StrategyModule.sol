@@ -63,7 +63,9 @@ abstract contract StrategyModule is IStrategyModule, ModuleBase {
     function removeStrategy(
         address strategy
     ) external onlyRole(REMOVE_STRATEGY_ROLE) {
-        _strategyStorage().isStrategy[strategy] = false;
+        StrategyStorage storage $ = _strategyStorage();
+        if (!$.isStrategy[strategy]) revert InvalidStrategy();
+        $.isStrategy[strategy] = false;
         emit StrategyRemoved(strategy);
     }
 

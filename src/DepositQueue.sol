@@ -367,26 +367,22 @@ contract DepositQueue is
         uint256 currentBatchId = IFund(fund).getCurrentBatchId();
         uint256 assetCount = _allowedAssets.length;
 
+        DepositRequestInfo[] memory result = new DepositRequestInfo[](assetCount);
         uint256 count;
-        for (uint256 i = 0; i < assetCount; i++) {
-            if (_depositRequests[_allowedAssets[i]][currentBatchId][investor].amount > 0) {
-                count++;
-            }
-        }
-
-        DepositRequestInfo[] memory result = new DepositRequestInfo[](count);
-        uint256 idx;
         for (uint256 i = 0; i < assetCount; i++) {
             address asset = _allowedAssets[i];
             DepositRequest storage req = _depositRequests[asset][currentBatchId][investor];
             if (req.amount > 0) {
-                result[idx++] = DepositRequestInfo({
+                result[count++] = DepositRequestInfo({
                     asset: asset,
                     batchId: currentBatchId,
                     amount: req.amount,
                     timestamp: req.timestamp
                 });
             }
+        }
+        assembly ("memory-safe") {
+            mstore(result, count)
         }
         return result;
     }
@@ -399,27 +395,22 @@ contract DepositQueue is
         uint256 len = deposits.length();
         uint256 currentBatchId = IFund(fund).getCurrentBatchId();
 
+        DepositRequestInfo[] memory result = new DepositRequestInfo[](len);
         uint256 count;
         for (uint256 i = 0; i < len; i++) {
             (address asset, uint256 batchId) = _decodeAssetBatch(deposits.at(i));
             if (batchId < currentBatchId && _isBatchSettled(asset, batchId)) {
-                count++;
-            }
-        }
-
-        DepositRequestInfo[] memory result = new DepositRequestInfo[](count);
-        uint256 idx;
-        for (uint256 i = 0; i < len; i++) {
-            (address asset, uint256 batchId) = _decodeAssetBatch(deposits.at(i));
-            if (batchId < currentBatchId && _isBatchSettled(asset, batchId)) {
                 DepositRequest storage req = _depositRequests[asset][batchId][investor];
-                result[idx++] = DepositRequestInfo({
+                result[count++] = DepositRequestInfo({
                     asset: asset,
                     batchId: batchId,
                     amount: req.amount,
                     timestamp: req.timestamp
                 });
             }
+        }
+        assembly ("memory-safe") {
+            mstore(result, count)
         }
         return result;
     }

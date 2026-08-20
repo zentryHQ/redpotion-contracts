@@ -5,7 +5,12 @@ library AssetSet {
     function union(
         address[] memory a,
         address[] memory b
-    ) internal pure returns (address[] memory) {
+    ) internal pure returns (address[] memory result) {
+        result = new address[](a.length + b.length);
+        for (uint256 i = 0; i < a.length; i++) {
+            result[i] = a[i];
+        }
+
         uint256 count = a.length;
         for (uint256 i = 0; i < b.length; i++) {
             bool found = false;
@@ -15,30 +20,14 @@ library AssetSet {
                     break;
                 }
             }
-            if (!found) count++;
-        }
-
-        address[] memory result = new address[](count);
-        for (uint256 i = 0; i < a.length; i++) {
-            result[i] = a[i];
-        }
-
-        uint256 idx = a.length;
-        for (uint256 i = 0; i < b.length; i++) {
-            bool found = false;
-            for (uint256 j = 0; j < a.length; j++) {
-                if (b[i] == a[j]) {
-                    found = true;
-                    break;
-                }
-            }
             if (!found) {
-                result[idx] = b[i];
-                idx++;
+                result[count] = b[i];
+                count++;
             }
         }
-
-        return result;
+        assembly ("memory-safe") {
+            mstore(result, count)
+        }
     }
 
     /// @dev Returns `a` plus `x` if `x` is not already in `a`.

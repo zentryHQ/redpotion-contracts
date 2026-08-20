@@ -16,9 +16,16 @@ interface IFeeManager {
         uint256 effectiveBatchId;
     }
 
-    event ManagementFeeAccrued(uint256 feeShares);
-    event PerformanceFeeAccrued(uint256 feeShares, uint256 newHighWaterMark);
-    event ProtocolFeeAccrued(uint256 protocolFeeShares);
+    /// @dev `newHighWaterMark` is nonzero only when a performance fee accrued.
+    struct FeeAccrualResult {
+        address recipient;
+        uint256 managementFeeShares;
+        uint256 performanceFeeShares;
+        uint256 newHighWaterMark;
+        address protocolRecipient;
+        uint256 protocolFeeShares;
+    }
+
     event FeeRecipientUpdated(address indexed feeRecipient);
     event FeeConfigUpdated(FeeConfig config);
     event FeeConfigPending(FeeConfig config, uint256 effectiveBatchId);
@@ -66,10 +73,10 @@ interface IFeeManager {
     /// Splits protocol fee from fund fee using protocolFeeBps. Updates HWM and
     /// lastFeeAccrual. `batchId` is the batch being settled; staged fee configs
     /// effective from `batchId + 1` are promoted to active after accrual.
-    /// Returns (feeRecipient, feeShares, protocolFeeRecipient, protocolFeeShares).
+    /// Fund mints the shares and emits the accrual events.
     function accrueFees(
         uint256 totalSupply,
         uint256 newPrice,
         uint256 batchId
-    ) external returns (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares);
+    ) external returns (FeeAccrualResult memory result);
 }

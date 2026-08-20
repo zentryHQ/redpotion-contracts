@@ -73,9 +73,6 @@ interface IReportModule {
     error DelayExceedsLimit();
     error ZeroDelay();
     error MinDelayExceedsMax();
-    error PriceBelowMin();
-    error PriceAboveMax();
-    error AbsoluteDeltaTooHigh();
     error InvalidPriceSafety();
 
     function currentBatchId() external view returns (uint256);

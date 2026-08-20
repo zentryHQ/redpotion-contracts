@@ -69,7 +69,6 @@ interface IRedeemQueue {
     error ZeroAddress();
     error ZeroAmount();
     error NoRequest();
-    error BatchClosed();
     error BatchNotFunded();
     error NothingToClaim();
     error UnsupportedAsset();

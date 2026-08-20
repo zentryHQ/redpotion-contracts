@@ -9,5 +9,11 @@ import "./IModuleErrors.sol";
 interface IFeeManagerModule is IModuleErrors {
     event FeeManagerUpdated(address indexed feeManager);
 
+    // Accrual events are emitted by Fund (not the FeeManager spoke) so the
+    // emitter identifies the fund and the payload carries the settled batch.
+    event ManagementFeeAccrued(uint256 indexed batchId, uint256 feeShares);
+    event PerformanceFeeAccrued(uint256 indexed batchId, uint256 feeShares, uint256 newHighWaterMark);
+    event ProtocolFeeAccrued(uint256 indexed batchId, uint256 feeShares);
+
     function feeManager() external view returns (address);
 }

@@ -48,13 +48,22 @@ abstract contract FeeManagerModule is IFeeManagerModule, ModuleBase {
         return IFeeManager(_feeManagerStorage().feeManager).getFeeConfigForBatch(batchId);
     }
 
-    /// @dev Calls FeeManager to compute + update fee state. Returns fund
-    /// recipient + shares and protocol recipient + shares. Fund does the minting.
+    /// @dev Calls FeeManager to compute + update fee state and emits the
+    /// accrual events from Fund. Fund does the minting.
     function _accrueFees(
         uint256 totalSupply,
         uint256 newPrice,
         uint256 batchId
-    ) internal returns (address recipient, uint256 feeShares, address protocolRecipient, uint256 protocolFeeShares) {
-        return IFeeManager(_feeManagerStorage().feeManager).accrueFees(totalSupply, newPrice, batchId);
+    ) internal returns (IFeeManager.FeeAccrualResult memory result) {
+        result = IFeeManager(_feeManagerStorage().feeManager).accrueFees(totalSupply, newPrice, batchId);
+        if (result.managementFeeShares > 0) {
+            emit ManagementFeeAccrued(batchId, result.managementFeeShares);
+        }
+        if (result.performanceFeeShares > 0) {
+            emit PerformanceFeeAccrued(batchId, result.performanceFeeShares, result.newHighWaterMark);
+        }
+        if (result.protocolFeeShares > 0) {
+            emit ProtocolFeeAccrued(batchId, result.protocolFeeShares);
+        }
     }
 }

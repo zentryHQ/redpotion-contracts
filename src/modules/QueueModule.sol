@@ -71,10 +71,9 @@ abstract contract QueueModule is IQueueModule, ModuleBase {
         IFundShare(shareToken).mint(dq, userShares);
         if (feeShares > 0) {
             IFundShare(shareToken).mint(feeRecipient_, feeShares);
+            emit EntryFeeAccrued(asset, batchId, feeShares);
         }
         IDepositQueue(dq).settleDeposit(asset, batchId, userShares);
-
-        emit DepositSettled(asset, batchId, userShares, feeShares);
     }
 
     /// @dev Tells the redeem queue to settle the batch (snapshotting the asset
@@ -102,9 +101,8 @@ abstract contract QueueModule is IQueueModule, ModuleBase {
 
         if (feeShares > 0) {
             IFundShare(shareToken).mint(feeRecipient_, feeShares);
+            emit ExitFeeAccrued(asset, batchId, feeShares);
         }
-
-        emit RedeemSettled(asset, batchId, redeemTotal, feeShares);
     }
 
     function _calcDepositShares(
