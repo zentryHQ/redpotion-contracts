@@ -21,10 +21,20 @@ Notes:
 - **High-water mark (HWM)**: tracked on the fee-base-asset share price. First accrual initializes it to the reported price; afterwards, performance fee only accrues when the new price exceeds the HWM, and the HWM ratchets up to the new price.
 - **Fee base asset**: management/performance/protocol fees accrue on the base asset's report, which is why the Fund always includes `feeBaseAsset` in the reported asset set.
 - **Protocol fee recipient is not stored here** — it is read from the [FundManagerDeployer](FundManagerDeployer.md) at accrual time, so a protocol-wide migration only needs one pointer flip. If the resolved recipient is zero, the protocol fee is skipped.
-- **Fee changes are batch-staged**: `setFeeConfig` never touches a batch already open for requests. The new config is staged to take effect from the **next batch to open** (`currentBatchId + 1`) and is promoted to the active config during that boundary's settlement — so every request settles at the fee config it was quoted when submitted. Restaging for the same boundary overwrites the staged entry.
+- **Fee changes are batch-staged** — a new config never touches a batch already open for requests. See the lifecycle below.
 - All bps values are capped at 10000 (100%).
 
 Admin functions authorize against the **Fund's** access control (spoke pattern).
+
+## Fee config lifecycle — when a change applies
+
+`setFeeConfig` never changes fees immediately. A change goes through three steps:
+
+1. **Stage.** `setFeeConfig` called while batch `N` is open for requests stores the config as a pending entry with `effectiveBatchId = N + 1` and emits `FeeConfigPending`. The active config is untouched, so batch `N` — which may already contain requests — still settles at the rates it was quoted. Restaging while batch `N` is still open overwrites the same pending entry; once batch `N + 1` opens, a new `setFeeConfig` targets `N + 2`, so multiple pending entries can queue up if settlements lag behind batch cutoffs.
+2. **Effective for quoting.** From the moment batch `N + 1` opens, requests are quoted at the staged rates: `getFeeConfigForBatch(batchId)` resolves the latest pending entry effective at or before `batchId` (falling back to the active config), and both settlement and `getRiskContext` read fees through it. A pending config therefore governs its batches **as soon as they open**, before any promotion happens.
+3. **Promote.** During settlement of batch `B` (`accrueFees(…, B)`), every pending entry with `effectiveBatchId <= B + 1` is consumed: the **latest** of them becomes the active config (emitting `FeeConfigUpdated`) and the earlier ones are dropped — they already did their job through `getFeeConfigForBatch` when their batches settled. Promotion runs after that batch's entry/exit rates were read, which is why the Fund quotes `getFeeConfigForBatch(B)` *before* calling `accrueFees`.
+
+Net effect: a fee change applies to the **next batch to open** and every batch after it, and can never retroactively affect requests already submitted.
 
 ## Function reference
 
@@ -32,7 +42,7 @@ Admin functions authorize against the **Fund's** access control (spoke pattern).
 
 | Function | Access | Description |
 |---|---|---|
-| `accrueFees(totalSupply, newPrice, batchId)` | `onlyFund` | Computes management, performance, and protocol fee shares since `lastFeeAccrual`, updates HWM and `lastFeeAccrual`, and returns `(recipient, feeShares, protocolRecipient, protocolFeeShares)` for the Fund to mint. Called once per accepted report, on the fee base asset. `batchId` is the batch being settled; after accrual, staged fee configs effective from `batchId + 1` are promoted to active. |
+| `accrueFees(totalSupply, newPrice, batchId)` | `onlyFund` | Computes management, performance, and protocol fee shares since `lastFeeAccrual`, updates HWM and `lastFeeAccrual`, and returns a `FeeAccrualResult` struct — `recipient`, `managementFeeShares`, `performanceFeeShares`, `newHighWaterMark` (nonzero only when a performance fee accrued), `protocolRecipient`, `protocolFeeShares`. The Fund mints the shares and emits the accrual events (`ManagementFeeAccrued` / `PerformanceFeeAccrued` / `ProtocolFeeAccrued`). Called once per accepted report, on the fee base asset. `batchId` is the batch being settled; after accrual, staged fee configs are promoted (see lifecycle above). |
 
 ### Admin setters (roles checked on the Fund)
 

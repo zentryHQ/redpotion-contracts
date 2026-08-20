@@ -45,8 +45,8 @@ sequenceDiagram
     O-->>F: (batchId, prices[]) — batch advances
     F->>FM: getFeeConfigForBatch(batchId) — entry/exit fees this batch was quoted
     F->>FM: accrueFees(totalSupply, basePrice, batchId)
-    FM-->>F: (feeRecipient, feeShares, protocolRecipient, protocolShares)
-    F->>S: mint fee shares
+    FM-->>F: FeeAccrualResult (mgmt/perf/protocol fee shares + recipients)
+    F->>S: mint fee shares — Fund emits the *FeeAccrued events
     loop for each asset
         F->>DQ: read batchDepositTotals(asset, batchId)
         F->>S: mint user shares → DepositQueue, entry-fee shares → feeRecipient
@@ -56,7 +56,7 @@ sequenceDiagram
     end
 ```
 
-Fees accrue **once, before any queue settlement**, so the management/performance fee base is the share supply that was invested over the elapsed period — this batch's deposit mints and redeem burns cannot leak into it. Entry/exit fees are read via `FeeManager.getFeeConfigForBatch(batchId)` before accrual (accrual promotes staged fee configs, after which the batch's rates would no longer be resolvable) — see [FeeManager](FeeManager.md).
+Fees accrue **once, before any queue settlement**, so the management/performance fee base is the share supply that was invested over the elapsed period — this batch's deposit mints and redeem burns cannot leak into it. Entry/exit fees are read via `FeeManager.getFeeConfigForBatch(batchId)` before accrual (accrual promotes staged fee configs, after which the batch's rates would no longer be resolvable) — see the fee config lifecycle in [FeeManager](FeeManager.md). The FeeManager only computes; the Fund mints all fee shares and emits every accrual event: `ManagementFeeAccrued` / `PerformanceFeeAccrued` / `ProtocolFeeAccrued` once per settlement, and `EntryFeeAccrued` / `ExitFeeAccrued` per asset as each queue batch settles.
 
 Share math (in `QueueModule`):
 - Deposit: `totalShares = depositAmount * 1e18 / price`, entry fee = `totalShares * entryFeeBps / 10000`, user gets the rest.
